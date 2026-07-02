@@ -7,6 +7,7 @@ import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 const ITEMS = [
   { icon: 'share-social-outline', title: 'Social Media', subtitle: 'Scheduled posts, creatives' },
   { icon: 'navigate-outline', title: 'Ads Management', subtitle: 'Analytics, run & manage ads' },
+  { icon: 'globe-outline', title: 'My Website', subtitle: 'Your agent website, visits & leads' },
   { icon: 'document-text-outline', title: 'Documents', subtitle: 'Authority to Sell, MOA, CTS, LOI' },
   { icon: 'settings-outline', title: 'Settings', subtitle: 'Profile, accounts, notifications' },
 ] as const;
