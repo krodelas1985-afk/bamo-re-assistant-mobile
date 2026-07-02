@@ -1,98 +1,78 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Screen } from '@/components/screen';
+import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+// Placeholder data — replaced by live Supabase queries in Phase 2.
+const STATS = [
+  { label: 'New leads (7d)', value: '—', hint: '' },
+  { label: 'Hot leads', value: '—', hint: '' },
+  { label: 'Viewings this week', value: '—', hint: '' },
+  { label: 'Active listings', value: '—', hint: '' },
+];
 
 export default function HomeScreen() {
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <Screen>
+      <View style={styles.greetingCard}>
+        <Text style={styles.greetingSmall}>Magandang umaga,</Text>
+        <Text style={styles.greetingName}>Agent 👋</Text>
+        <Text style={styles.greetingBody}>
+          BaMo is setting things up. Your overnight summary will appear here.
+        </Text>
+      </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      <View style={styles.statsGrid}>
+        {STATS.map((s) => (
+          <View key={s.label} style={styles.statCard}>
+            <Text style={styles.statLabel}>{s.label}</Text>
+            <Text style={styles.statValue}>{s.value}</Text>
+          </View>
+        ))}
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  greetingCard: {
+    backgroundColor: BrandColors.navyDeep,
+    borderRadius: Radii.cardLarge,
+    padding: 20,
+    gap: 4,
+  },
+  greetingSmall: {
+    ...TypeScale.body,
+    color: BrandColors.cream300,
+  },
+  greetingName: {
+    ...TypeScale.h2,
+    color: BrandColors.white,
+  },
+  greetingBody: {
+    ...TypeScale.body,
+    color: BrandColors.cream200,
+    marginTop: 8,
+  },
+  statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+  statCard: {
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.card,
+    padding: 16,
+    flexBasis: '47%',
+    flexGrow: 1,
+    gap: 4,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  statLabel: {
+    ...TypeScale.label,
+    color: BrandColors.textSecondary,
   },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  statValue: {
+    ...TypeScale.h1,
+    color: BrandColors.navy,
   },
 });
