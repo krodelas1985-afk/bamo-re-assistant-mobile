@@ -13,10 +13,13 @@ const TAB_ICONS = {
 } as const;
 
 export default function TabsLayout() {
-  const { session, loading } = useAuth();
+  const { session, loading, needsOnboarding } = useAuth();
 
   if (loading) return null;
   if (!session) return <Redirect href="/login" />;
+  // Wait until the onboarding gate resolves to avoid a redirect flicker.
+  if (needsOnboarding === null) return null;
+  if (needsOnboarding) return <Redirect href="/onboarding" />;
 
   return (
     <Tabs

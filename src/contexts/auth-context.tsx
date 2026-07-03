@@ -1,6 +1,7 @@
 import { Session } from '@supabase/supabase-js';
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
+import { hasSubmittedOnboarding } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
 
 export type Profile = {
@@ -17,6 +18,9 @@ type AuthState = {
   profile: Profile | null;
   /** true until the persisted session has been restored (prevents redirect flicker) */
   loading: boolean;
+  /** true once we know the user must complete onboarding; null while still resolving */
+  needsOnboarding: boolean | null;
+  refreshOnboarding: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
@@ -27,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -43,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session?.user) {
       setProfile(null);
+      setNeedsOnboarding(null);
       return;
     }
     let cancelled = false;
@@ -51,13 +57,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('id, full_name, email, role, client_id, is_active')
       .eq('id', session.user.id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setProfile(data ?? null);
+      .then(async ({ data }) => {
+        if (cancelled) return;
+        const prof = (data as Profile) ?? null;
+        setProfile(prof);
+        setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, prof));
       });
     return () => {
       cancelled = true;
     };
   }, [session?.user?.id]);
+
+  const refreshOnboarding = async () => {
+    if (!session?.user) return;
+    setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, profile));
+  };
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
@@ -69,10 +83,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ session, profile, loading, needsOnboarding, refreshOnboarding, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+/**
+ * Onboarding gate: BaMo admins and already-provisioned users (client_id set) never
+ * onboard. Everyone else needs it until they have a submitted/approved row.
+ */
+async function resolveNeedsOnboarding(userId: string, profile: Profile | null): Promise<boolean> {
+  if (!profile) return false; // no profile row (admin/testing) — don't trap
+  if (profile.role === 'baymo_admin') return false;
+  if (profile.client_id) return false;
+  return !(await hasSubmittedOnboarding(userId));
 }
 
 export function useAuth(): AuthState {
