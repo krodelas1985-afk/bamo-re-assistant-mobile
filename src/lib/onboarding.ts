@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 
-export type BusinessType = 'agent' | 'broker' | 'developer';
+// Values must match the client_onboarding.business_type check constraint.
+// 'individual'/'brokerage' (not 'agent'/'broker') to avoid colliding with the role vocabulary.
+export type BusinessType = 'individual' | 'brokerage' | 'developer';
 
 /** Free-form answers captured across the wizard, stored in the `answers` jsonb column. */
 export type OnboardingAnswers = {

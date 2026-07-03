@@ -21,8 +21,8 @@ import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 const baymoAvatar = require('../../assets/brand/baymo.png');
 
 const BUSINESS_TYPES: { value: BusinessType; label: string; sub: string }[] = [
-  { value: 'agent', label: 'Solo Agent', sub: 'I sell on my own' },
-  { value: 'broker', label: 'Broker', sub: 'I have a team of agents' },
+  { value: 'individual', label: 'Solo Agent', sub: 'I sell on my own' },
+  { value: 'brokerage', label: 'Broker', sub: 'I have a team of agents' },
   { value: 'developer', label: 'Developer', sub: 'I sell my own projects' },
 ];
 const PROPERTY_TYPES = ['House & Lot', 'Condo', 'Townhouse', 'Lot Only', 'Commercial'];
@@ -91,7 +91,7 @@ export default function OnboardingScreen() {
   const stepValid = (): string | null => {
     if (step === 1 && !fullName.trim()) return 'Please enter your name.';
     if (step === 2 && !businessType) return 'Please pick what best describes you.';
-    if (step === 2 && businessType !== 'agent' && !companyName.trim())
+    if (step === 2 && businessType !== 'individual' && !companyName.trim())
       return 'Please enter your company name.';
     if (step === 3 && propertyTypes.length === 0) return 'Pick at least one property type.';
     if (step === 4 && !goal) return 'Pick your main goal.';
@@ -105,7 +105,7 @@ export default function OnboardingScreen() {
       full_name: fullName.trim() || null,
       phone: phone.trim() || null,
       business_type: businessType,
-      company_name: businessType === 'agent' ? null : companyName.trim() || null,
+      company_name: businessType === 'individual' ? null : companyName.trim() || null,
       answers,
     });
   };
@@ -128,7 +128,7 @@ export default function OnboardingScreen() {
         full_name: fullName.trim() || null,
         phone: phone.trim() || null,
         business_type: businessType,
-        company_name: businessType === 'agent' ? null : companyName.trim() || null,
+        company_name: businessType === 'individual' ? null : companyName.trim() || null,
         answers,
       });
       setSaving(false);
@@ -217,7 +217,7 @@ export default function OnboardingScreen() {
                 </Pressable>
               ))}
             </View>
-            {businessType && businessType !== 'agent' && (
+            {businessType && businessType !== 'individual' && (
               <TextField
                 label="Company / brokerage name"
                 value={companyName}
@@ -293,7 +293,7 @@ export default function OnboardingScreen() {
                 label="Type"
                 value={BUSINESS_TYPES.find((b) => b.value === businessType)?.label ?? '—'}
               />
-              {businessType !== 'agent' && <ReviewRow label="Company" value={companyName || '—'} />}
+              {businessType !== 'individual' && <ReviewRow label="Company" value={companyName || '—'} />}
               <ReviewRow label="Sells" value={propertyTypes.join(', ') || '—'} />
               <ReviewRow label="Areas" value={areasServed || '—'} />
               <ReviewRow label="Goal" value={goal ?? '—'} />
