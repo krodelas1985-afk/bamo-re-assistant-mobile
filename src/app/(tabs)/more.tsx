@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
 const ITEMS = [
@@ -13,6 +14,8 @@ const ITEMS = [
 ] as const;
 
 export default function MoreScreen() {
+  const { profile, session, signOut } = useAuth();
+
   return (
     <Screen title="More">
       {ITEMS.map((item) => (
@@ -27,6 +30,18 @@ export default function MoreScreen() {
           <Ionicons name="chevron-forward" size={18} color={BrandColors.textMuted} />
         </View>
       ))}
+
+      <Pressable style={styles.row} onPress={signOut}>
+        <View style={styles.iconCircle}>
+          <Ionicons name="log-out-outline" size={20} color={BrandColors.error} />
+        </View>
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, { color: BrandColors.error }]}>Sign out</Text>
+          <Text style={styles.rowSubtitle}>
+            {profile?.email ?? session?.user.email ?? ''}
+          </Text>
+        </View>
+      </Pressable>
     </Screen>
   );
 }

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
 // Placeholder data — replaced by live Supabase queries in Phase 2.
@@ -11,12 +12,23 @@ const STATS = [
   { label: 'Active listings', value: '—', hint: '' },
 ];
 
+function greetingForNow(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Magandang umaga,';
+  if (hour < 18) return 'Magandang hapon,';
+  return 'Magandang gabi,';
+}
+
 export default function HomeScreen() {
+  const { profile, session } = useAuth();
+  const displayName =
+    profile?.full_name?.split(/\s+/)[0] ?? session?.user.email?.split('@')[0] ?? 'Agent';
+
   return (
     <Screen>
       <View style={styles.greetingCard}>
-        <Text style={styles.greetingSmall}>Magandang umaga,</Text>
-        <Text style={styles.greetingName}>Agent 👋</Text>
+        <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
+        <Text style={styles.greetingName}>{displayName} 👋</Text>
         <Text style={styles.greetingBody}>
           BaMo is setting things up. Your overnight summary will appear here.
         </Text>
