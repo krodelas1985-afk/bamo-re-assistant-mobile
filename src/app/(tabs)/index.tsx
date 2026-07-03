@@ -1,16 +1,11 @@
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
-
-// Placeholder data — replaced by live Supabase queries in Phase 2.
-const STATS = [
-  { label: 'New leads (7d)', value: '—', hint: '' },
-  { label: 'Hot leads', value: '—', hint: '' },
-  { label: 'Viewings this week', value: '—', hint: '' },
-  { label: 'Active listings', value: '—', hint: '' },
-];
+import { LeadStats, fetchLeadStats } from '@/lib/leads';
 
 function greetingForNow(): string {
   const hour = new Date().getHours();
@@ -19,10 +14,33 @@ function greetingForNow(): string {
   return 'Magandang gabi,';
 }
 
+const DASH = '—';
+
 export default function HomeScreen() {
   const { profile, session } = useAuth();
+  const [stats, setStats] = useState<LeadStats | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      fetchLeadStats().then((s) => {
+        if (active) setStats(s);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
   const displayName =
     profile?.full_name?.split(/\s+/)[0] ?? session?.user.email?.split('@')[0] ?? 'Agent';
+
+  const cards = [
+    { label: 'New leads (7d)', value: stats ? String(stats.newThisWeek) : DASH },
+    { label: 'Hot leads', value: stats ? String(stats.hot) : DASH },
+    { label: 'Ready to follow up', value: stats ? String(stats.ready) : DASH },
+    { label: 'For viewing', value: stats ? String(stats.forViewing) : DASH },
+  ];
 
   return (
     <Screen>
@@ -30,12 +48,12 @@ export default function HomeScreen() {
         <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
         <Text style={styles.greetingName}>{displayName} 👋</Text>
         <Text style={styles.greetingBody}>
-          BaMo is setting things up. Your overnight summary will appear here.
+          BaMo is handling the follow-ups. Here&apos;s what needs your attention.
         </Text>
       </View>
 
       <View style={styles.statsGrid}>
-        {STATS.map((s) => (
+        {cards.map((s) => (
           <View key={s.label} style={styles.statCard}>
             <Text style={styles.statLabel}>{s.label}</Text>
             <Text style={styles.statValue}>{s.value}</Text>

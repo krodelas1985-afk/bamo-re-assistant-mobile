@@ -1,19 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/avatar';
-import { Badge, BadgeTone } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import type { Lead } from '@/lib/leads';
 
-export type Lead = {
-  id: string;
-  name: string;
-  timestamp: string; // e.g. "2h ago"
-  source: string; // e.g. "Messenger"
-  status: string; // e.g. "Ready", "Qualified"
-  statusTone: BadgeTone;
-  summary: string;
-};
+export type { Lead };
 
 /** Lead card per the approved mockup: avatar, name/meta, status badge, summary, actions. */
 export function LeadCard({
