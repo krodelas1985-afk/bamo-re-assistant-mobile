@@ -1,61 +1,92 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Listing, ListingCard } from '@/components/listing-card';
 import { Screen } from '@/components/screen';
+import { Button } from '@/components/ui/button';
+import { fetchMyListings } from '@/lib/listings';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
-// Sample data — replaced by live BaMo Marketplace listings in Phase 3.
-const SAMPLE_LISTINGS: Listing[] = [
-  {
-    id: '1',
-    title: 'MIRA — 2BR Townhouse',
-    location: 'Vermira Living Spaces, Lipa, Batangas',
-    price: 4250000,
-    bedrooms: 2,
-    baths: 2,
-    floorArea: 88,
-    status: 'Active',
-    statusTone: 'success',
-    financing: ['Pag-IBIG', 'Bank Loan', 'In-house'],
-  },
-  {
-    id: '2',
-    title: 'ALON — 3BR Single Attached',
-    location: 'Vermira Living Spaces, Lipa, Batangas',
-    price: 5800000,
-    bedrooms: 3,
-    baths: 2,
-    floorArea: 120,
-    status: 'Reserved',
-    statusTone: 'warm',
-    financing: ['Bank Loan', 'In-house'],
-  },
-];
-
 export default function ListingsScreen() {
+  const router = useRouter();
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    const { data, error: e } = await fetchMyListings();
+    if (e) setError(e);
+    else setListings(data);
+    setLoading(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
   return (
     <Screen title="Listings">
-      <View style={styles.syncBanner}>
-        <Text style={styles.syncText}>Synced with BaMo Marketplace · bahaymo.com</Text>
-      </View>
+      <Pressable style={styles.postBtn} onPress={() => router.push('/listing-new')}>
+        <Ionicons name="add-circle" size={22} color={BrandColors.white} />
+        <Text style={styles.postText}>Post your property</Text>
+      </Pressable>
 
-      {SAMPLE_LISTINGS.map((listing) => (
-        <ListingCard key={listing.id} listing={listing} />
-      ))}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={BrandColors.navy} />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyText}>Couldn&apos;t load your listings.</Text>
+          <Text style={styles.errorDetail}>{error}</Text>
+          <Button label="Try again" small onPress={load} style={styles.retry} />
+        </View>
+      ) : listings.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyText}>
+            No listings yet. Tap “Post your property” and let BayMo write it up for you. 🏡
+          </Text>
+        </View>
+      ) : (
+        listings.map((listing) => <ListingCard key={listing.id} listing={listing} />)
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  syncBanner: {
-    backgroundColor: BrandColors.cream200,
+  postBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: BrandColors.orange,
     borderRadius: Radii.button,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 14,
   },
-  syncText: {
-    ...TypeScale.label,
-    color: BrandColors.orangeDark,
+  postText: { ...TypeScale.button, color: BrandColors.white },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    gap: 10,
+  },
+  emptyText: {
+    ...TypeScale.body,
+    color: BrandColors.textSecondary,
     textAlign: 'center',
+    paddingHorizontal: 24,
   },
+  errorDetail: {
+    ...TypeScale.bodySmall,
+    color: BrandColors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  retry: { marginTop: 4 },
 });

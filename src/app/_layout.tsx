@@ -35,6 +35,8 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
         <Stack.Screen name="onboarding" />
+        <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="listing-new" options={{ presentation: 'modal' }} />
       </Stack>
     </AuthProvider>
   );
