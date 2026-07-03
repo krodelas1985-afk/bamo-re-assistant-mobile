@@ -2,10 +2,19 @@ import { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BaymoBubble } from '@/components/baymo-bubble';
 import { BrandColors, TypeScale } from '@/constants/brand';
 
 /** Standard screen shell: gray app background, safe area, optional title header, scrollable content. */
-export function Screen({ title, children }: { title?: string; children: ReactNode }) {
+export function Screen({
+  title,
+  children,
+  showBaymo = true,
+}: {
+  title?: string;
+  children: ReactNode;
+  showBaymo?: boolean;
+}) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {title ? (
@@ -14,6 +23,7 @@ export function Screen({ title, children }: { title?: string; children: ReactNod
         </View>
       ) : null}
       <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView>
+      {showBaymo && <BaymoBubble />}
     </SafeAreaView>
   );
 }
