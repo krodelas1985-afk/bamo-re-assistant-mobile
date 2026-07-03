@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +16,7 @@ export function Screen({
   children: ReactNode;
   showBaymo?: boolean;
 }) {
+  const router = useRouter();
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       {title ? (
@@ -23,7 +25,7 @@ export function Screen({
         </View>
       ) : null}
       <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView>
-      {showBaymo && <BaymoBubble />}
+      {showBaymo && <BaymoBubble onPress={() => router.push('/chat')} />}
     </SafeAreaView>
   );
 }
