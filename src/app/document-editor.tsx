@@ -40,12 +40,25 @@ export default function DocumentEditorScreen() {
   const [type, setType] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [context, setContext] = useState('');
   const [status, setStatus] = useState<DocStatus>('draft');
+
+  // Quick fields + free-text that feed the AI draft (new documents only).
+  const [seller, setSeller] = useState('');
+  const [buyer, setBuyer] = useState('');
+  const [property, setProperty] = useState('');
+  const [price, setPrice] = useState('');
+  const [commission, setCommission] = useState('');
+  const [agent, setAgent] = useState('');
+  const [context, setContext] = useState('');
 
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // Prefill the agent's own name on a new document.
+  useEffect(() => {
+    if (isNew && profile?.full_name) setAgent(profile.full_name);
+  }, [isNew, profile]);
 
   useEffect(() => {
     if (isNew) return;
@@ -63,13 +76,24 @@ export default function DocumentEditorScreen() {
     });
   }, [id, isNew, router]);
 
+  const composeContext = (): string => {
+    const parts: string[] = [];
+    if (seller.trim()) parts.push(`Seller / Owner: ${seller.trim()}`);
+    if (buyer.trim()) parts.push(`Buyer: ${buyer.trim()}`);
+    if (property.trim()) parts.push(`Property: ${property.trim()}`);
+    if (price.trim()) parts.push(`Price: ₱${price.trim()}`);
+    if (commission.trim()) parts.push(`Agent commission: ${commission.trim()}%`);
+    if (agent.trim()) parts.push(`Agent: ${agent.trim()}`);
+    return [parts.join('\n'), context.trim()].filter(Boolean).join('\n');
+  };
+
   const generate = async () => {
     if (!type) {
       Alert.alert('Pick a document type', 'Choose which document BayMo should draft.');
       return;
     }
     setGenerating(true);
-    const { body: draft, error } = await generateDocument(type, context);
+    const { body: draft, error } = await generateDocument(type, composeContext());
     setGenerating(false);
     if (error || draft == null) {
       Alert.alert('Could not generate', error ?? 'Please try again.');
@@ -173,17 +197,31 @@ export default function DocumentEditorScreen() {
               <View style={styles.aiCard}>
                 <Text style={styles.aiTitle}>✨ Draft with BayMo</Text>
                 <Text style={styles.aiSub}>
-                  Add the details you have (parties, property, price, dates). BayMo drafts the
-                  document and leaves [BRACKETED] blanks for anything missing.
+                  Fill in what you know — BayMo drafts the document around it and leaves [BRACKETED]
+                  blanks for anything you skip. All fields are optional.
                 </Text>
+
+                <TextField label="Seller / Owner" value={seller} onChangeText={setSeller} placeholder="e.g. Kathy Talabis" autoCapitalize="words" />
+                <TextField label="Buyer" value={buyer} onChangeText={setBuyer} placeholder="e.g. John Smith" autoCapitalize="words" />
+                <TextField label="Property" value={property} onChangeText={setProperty} placeholder="e.g. Lot 5 Blk 3, Vermira Lipa, Batangas" autoCapitalize="words" />
+                <View style={styles.twoCol}>
+                  <View style={styles.flex}>
+                    <TextField label="Price (₱)" value={price} onChangeText={setPrice} placeholder="4,500,000" keyboardType="numbers-and-punctuation" />
+                  </View>
+                  <View style={styles.flex}>
+                    <TextField label="Commission (%)" value={commission} onChangeText={setCommission} placeholder="2" keyboardType="numbers-and-punctuation" />
+                  </View>
+                </View>
+                <TextField label="Agent" value={agent} onChangeText={setAgent} placeholder="Your name" autoCapitalize="words" />
                 <TextField
-                  label="Details (optional)"
+                  label="Other details"
                   value={context}
                   onChangeText={setContext}
-                  placeholder="e.g. Seller: Juan Dela Cruz; Property: Lot 5 Blk 3 Vermira Lipa; Price ₱4.5M; 6-month authority"
+                  placeholder="e.g. 6-month authority, exclusive; buyer pays transfer taxes; earnest money ₱100k"
                   multiline
                   numberOfLines={3}
                 />
+
                 <Button
                   label={generating ? 'BayMo is drafting…' : '✨ Generate draft'}
                   onPress={generate}
@@ -274,6 +312,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   section: { ...TypeScale.h4, color: BrandColors.textHeading, marginTop: 4 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  twoCol: { flexDirection: 'row', gap: 12 },
+  flex: { flex: 1 },
   aiCard: {
     backgroundColor: BrandColors.cream100,
     borderRadius: Radii.card,
