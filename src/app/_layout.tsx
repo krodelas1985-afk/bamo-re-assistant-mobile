@@ -46,6 +46,8 @@ export default function RootLayout() {
         <Stack.Screen name="autopost-setup" options={{ presentation: 'modal' }} />
         <Stack.Screen name="post-compose" options={{ presentation: 'modal' }} />
         <Stack.Screen name="video-request" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="ads" />
+        <Stack.Screen name="campaign-request" options={{ presentation: 'modal' }} />
       </Stack>
     </AuthProvider>
   );
