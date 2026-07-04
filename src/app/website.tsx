@@ -35,10 +35,29 @@ export default function WebsiteScreen() {
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error: e } = await fetchMyWebsite();
-    if (e) setError(e);
-    else setSite(data);
-    setLoading(false);
+    try {
+      // Race against a timeout so the screen can never spin forever if the
+      // request stalls (e.g. flaky mobile data) — the user always gets a retry.
+      const result = await Promise.race([
+        fetchMyWebsite(),
+        new Promise<{ data: Website | null; error: string }>((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                data: null,
+                error: 'This is taking longer than usual. Check your connection and try again.',
+              }),
+            12000,
+          ),
+        ),
+      ]);
+      if (result.error) setError(result.error);
+      else setSite(result.data);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -107,7 +126,7 @@ export default function WebsiteScreen() {
   };
 
   return (
-    <Screen title="My Website">
+    <Screen title="My Website" onBack={() => router.back()}>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={BrandColors.navy} />
