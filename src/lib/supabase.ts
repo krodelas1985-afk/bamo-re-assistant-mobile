@@ -1,3 +1,8 @@
+// Polyfill the WHATWG URL API on native (Hermes lacks it). supabase-js parses
+// URLs during auth init; without this, signInWithPassword hangs forever on the
+// device (web is unaffected — it has a native URL). Must load before supabase-js.
+import 'react-native-url-polyfill/auto';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
