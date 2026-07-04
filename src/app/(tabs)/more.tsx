@@ -11,7 +11,7 @@ const ITEMS = [
   { icon: 'navigate-outline', title: 'Ads Management', subtitle: 'Performance, AI report, campaigns', route: '/ads' },
   { icon: 'globe-outline', title: 'My Website', subtitle: 'Your agent website, visits & leads', route: '/website' },
   { icon: 'document-text-outline', title: 'Documents', subtitle: 'Authority to Sell, MOA, CTS, LOI', route: '/documents' },
-  { icon: 'settings-outline', title: 'Settings', subtitle: 'Profile, accounts, notifications', route: null },
+  { icon: 'settings-outline', title: 'Settings', subtitle: 'Profile, password, account', route: '/settings' },
 ] as const;
 
 export default function MoreScreen() {
