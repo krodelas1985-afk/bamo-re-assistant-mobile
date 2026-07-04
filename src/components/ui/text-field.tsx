@@ -6,15 +6,16 @@ import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 export function TextField({
   label,
   error,
+  style,
   ...inputProps
 }: { label: string; error?: string | null } & TextInputProps) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[styles.input, error ? styles.inputError : null]}
         placeholderTextColor={BrandColors.textMuted}
         {...inputProps}
+        style={[styles.input, error ? styles.inputError : null, style]}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>

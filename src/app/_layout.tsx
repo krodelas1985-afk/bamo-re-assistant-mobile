@@ -40,6 +40,8 @@ export default function RootLayout() {
         <Stack.Screen name="appointment-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="website" />
         <Stack.Screen name="website-request" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="documents" />
+        <Stack.Screen name="document-editor" options={{ presentation: 'modal' }} />
       </Stack>
     </AuthProvider>
   );

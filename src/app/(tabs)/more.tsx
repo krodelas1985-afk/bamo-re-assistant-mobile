@@ -10,7 +10,7 @@ const ITEMS = [
   { icon: 'share-social-outline', title: 'Social Media', subtitle: 'Scheduled posts, creatives', route: null },
   { icon: 'navigate-outline', title: 'Ads Management', subtitle: 'Analytics, run & manage ads', route: null },
   { icon: 'globe-outline', title: 'My Website', subtitle: 'Your agent website, visits & leads', route: '/website' },
-  { icon: 'document-text-outline', title: 'Documents', subtitle: 'Authority to Sell, MOA, CTS, LOI', route: null },
+  { icon: 'document-text-outline', title: 'Documents', subtitle: 'Authority to Sell, MOA, CTS, LOI', route: '/documents' },
   { icon: 'settings-outline', title: 'Settings', subtitle: 'Profile, accounts, notifications', route: null },
 ] as const;
 
