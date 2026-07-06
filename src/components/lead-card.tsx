@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -11,15 +11,20 @@ export type { Lead };
 /** Lead card per the approved mockup: avatar, name/meta, status badge, summary, actions. */
 export function LeadCard({
   lead,
+  onPress,
   onMessage,
   onMarkHandled,
 }: {
   lead: Lead;
+  /** Tap anywhere on the card (outside the action buttons) — opens the lead profile. */
+  onPress?: (lead: Lead) => void;
   onMessage?: (lead: Lead) => void;
   onMarkHandled?: (lead: Lead) => void;
 }) {
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={onPress ? () => onPress(lead) : undefined}
+      style={({ pressed }) => [styles.card, pressed && onPress && styles.cardPressed]}>
       <View style={styles.topRow}>
         <Avatar name={lead.name} />
         <View style={styles.nameBlock}>
@@ -45,7 +50,7 @@ export function LeadCard({
           style={styles.actionButton}
         />
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -55,6 +60,9 @@ const styles = StyleSheet.create({
     borderRadius: Radii.card,
     padding: 16,
     gap: 12,
+  },
+  cardPressed: {
+    backgroundColor: BrandColors.cream50,
   },
   topRow: {
     flexDirection: 'row',

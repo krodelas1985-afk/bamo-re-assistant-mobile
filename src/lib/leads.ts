@@ -139,6 +139,149 @@ export async function fetchMyFbPageId(): Promise<string | null> {
   return (data as string | null) ?? null;
 }
 
+/** Extra per-lead fields shown only on the Lead Profile screen. */
+export type LeadDetail = Lead & {
+  email: string | null;
+  currentLocation: string | null;
+  timeframe: string | null;
+  motivation: string | null;
+  leadScore: number | null;
+  qualification: LeadQualification | null;
+};
+
+/** Qualification answers gathered by BaMo (lead_qualifications, one row per lead). */
+export type LeadQualification = {
+  budgetMin: number | null;
+  budgetMax: number | null;
+  propertyType: string | null;
+  propertySubType: string | null;
+  bedrooms: number | null;
+  preferredLocation: string[] | null;
+  paymentScheme: string | null;
+  preferredFinancing: string | null;
+  moveInDate: string | null;
+  purpose: string | null;
+  unitPreferred: string | null;
+};
+
+const DETAIL_SELECT =
+  SELECT + ', email, current_location, timeframe, motivation, lead_score';
+
+type LeadDetailRow = LeadRow & {
+  email: string | null;
+  current_location: string | null;
+  timeframe: string | null;
+  motivation: string | null;
+  lead_score: number | null;
+};
+
+/**
+ * Fetch one lead with profile + qualification data. Returns data: null when the
+ * lead is not visible (deleted, or reassigned away — RLS hides the row without
+ * an error), so the screen can show a friendly "no longer yours" state.
+ */
+export async function fetchLeadDetail(
+  id: string,
+): Promise<{ data: LeadDetail | null; error: string | null }> {
+  const [leadRes, qualRes] = await Promise.all([
+    supabase.from('leads').select(DETAIL_SELECT).eq('id', id).maybeSingle(),
+    supabase
+      .from('lead_qualifications')
+      .select(
+        'budget_min, budget_max, property_type, property_sub_type, bedrooms, preferred_location, payment_scheme, preferred_financing, move_in_date, purpose, unit_preferred',
+      )
+      .eq('lead_id', id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (leadRes.error) return { data: null, error: leadRes.error.message };
+  if (!leadRes.data) return { data: null, error: null };
+  const row = leadRes.data as unknown as LeadDetailRow;
+  const q = qualRes.data as Record<string, any> | null; // qual errors are non-fatal — profile still renders
+  return {
+    data: {
+      ...toLead(row),
+      email: row.email,
+      currentLocation: row.current_location,
+      timeframe: row.timeframe,
+      motivation: row.motivation,
+      leadScore: row.lead_score,
+      qualification: q
+        ? {
+            budgetMin: q.budget_min,
+            budgetMax: q.budget_max,
+            propertyType: q.property_type,
+            propertySubType: q.property_sub_type,
+            bedrooms: q.bedrooms,
+            preferredLocation: q.preferred_location,
+            paymentScheme: q.payment_scheme,
+            preferredFinancing: q.preferred_financing,
+            moveInDate: q.move_in_date,
+            purpose: q.purpose,
+            unitPreferred: q.unit_preferred,
+          }
+        : null,
+    },
+    error: null,
+  };
+}
+
+/** One message in a lead's conversation transcript. */
+export type ConversationMessage = {
+  id: string;
+  from: 'lead' | 'agent' | 'baymo';
+  text: string;
+  attachmentType: string | null;
+  time: string; // pre-formatted relative time
+};
+
+/**
+ * Sender attribution mirrors the CRM's senderLabel helper (repo-explore
+ * src/lib/utils.ts): ai/sequence/system senders and sent_via='baymo' are BaMo,
+ * otherwise trust the sender field, otherwise fall back to direction.
+ */
+function messageFrom(row: {
+  sender: string | null;
+  sent_via: string | null;
+  direction: string | null;
+}): ConversationMessage['from'] {
+  const sender = (row.sender ?? '').toLowerCase();
+  if (sender === 'ai' || sender === 'sequence' || sender === 'system' || row.sent_via === 'baymo')
+    return 'baymo';
+  if (sender === 'agent') return 'agent';
+  if (sender === 'lead') return 'lead';
+  return row.direction === 'outbound' ? 'agent' : 'lead';
+}
+
+/**
+ * The last 100 messages for a lead, oldest first (chat order). RLS only allows
+ * this for leads assigned to the signed-in agent.
+ */
+export async function fetchConversation(
+  leadId: string,
+): Promise<{ data: ConversationMessage[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('id, direction, sender, sent_via, message_content, attachment_type, created_at')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) return { data: [], error: error.message };
+  const messages = (data as any[])
+    .reverse()
+    .map((row) => ({
+      id: row.id,
+      from: messageFrom(row),
+      text: row.message_content?.trim() ?? '',
+      attachmentType: row.attachment_type,
+      time: relativeTime(row.created_at),
+    }))
+    // Skip rows with nothing to show (no text and no attachment marker).
+    .filter((m) => m.text || m.attachmentType);
+  return { data: messages, error: null };
+}
+
 /** Fetch all leads visible to the current user (RLS-scoped), most-recent first. */
 export async function fetchLeads(): Promise<{ data: Lead[]; error: string | null }> {
   const { data, error } = await supabase
