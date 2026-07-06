@@ -125,6 +125,20 @@ function toLead(row: LeadRow): Lead {
   };
 }
 
+/**
+ * The current client's PUBLIC Facebook Page ID (clients.fb_page_id), used to
+ * deep-link a Messenger lead into the client's Page inbox. Served by the
+ * get_my_fb_page_id() security-definer RPC because the clients table itself is
+ * baymo_admin-only RLS (and holds secrets we must not expose). Returns null when
+ * the client hasn't connected a Page yet. All the signed-in user's leads share
+ * this one Page, so the screen fetches it once.
+ */
+export async function fetchMyFbPageId(): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_my_fb_page_id');
+  if (error) return null;
+  return (data as string | null) ?? null;
+}
+
 /** Fetch all leads visible to the current user (RLS-scoped), most-recent first. */
 export async function fetchLeads(): Promise<{ data: Lead[]; error: string | null }> {
   const { data, error } = await supabase
