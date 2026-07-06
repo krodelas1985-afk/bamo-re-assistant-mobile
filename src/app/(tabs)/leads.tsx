@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native';
@@ -16,6 +17,9 @@ import {
   markLeadHandled,
   matchesFilter,
 } from '@/lib/leads';
+
+// One-time flag: agent has seen the "this opens your FB Page inbox" explainer.
+const FB_INBOX_HINT_KEY = 'bamo.leads.fbInboxHintSeen';
 
 const EMPTY_COPY: Record<LeadFilter, string> = {
   hot: 'No hot leads right now. BaMo will surface them here the moment one heats up. 🔥',
@@ -79,9 +83,43 @@ export default function LeadsScreen() {
         );
         return;
       }
-      Linking.openURL(url).catch(() =>
-        Alert.alert('Could not open', 'No app available to handle this message.'),
-      );
+
+      const open = () =>
+        Linking.openURL(url).catch(() =>
+          Alert.alert('Could not open', 'No app available to handle this message.'),
+        );
+
+      // First time an agent opens a Messenger lead's Page inbox, explain that it
+      // lives in the client's Facebook Page — so if the thread doesn't load they
+      // can self-diagnose it as missing Page "Messages" access rather than a bug.
+      // Shown once, then remembered.
+      if (messengerUrl) {
+        AsyncStorage.getItem(FB_INBOX_HINT_KEY).then((seen) => {
+          if (seen) {
+            open();
+            return;
+          }
+          Alert.alert(
+            'Opens your Facebook Page inbox',
+            "This lead messaged your Facebook Page, so the reply opens in Meta Business Suite. " +
+              "If the conversation doesn't load, ask your workspace admin to give you " +
+              '“Messages” access to the Page.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Open inbox',
+                onPress: () => {
+                  AsyncStorage.setItem(FB_INBOX_HINT_KEY, '1').catch(() => {});
+                  open();
+                },
+              },
+            ],
+          );
+        });
+        return;
+      }
+
+      open();
     },
     [fbPageId],
   );
