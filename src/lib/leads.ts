@@ -146,6 +146,8 @@ export type LeadDetail = Lead & {
   timeframe: string | null;
   motivation: string | null;
   leadScore: number | null;
+  /** BaMo automation on/off. Null in the DB means ON (CRM treats `!== false` as on). */
+  automationEnabled: boolean;
   qualification: LeadQualification | null;
 };
 
@@ -165,7 +167,7 @@ export type LeadQualification = {
 };
 
 const DETAIL_SELECT =
-  SELECT + ', email, current_location, timeframe, motivation, lead_score';
+  SELECT + ', email, current_location, timeframe, motivation, lead_score, automation_enabled';
 
 type LeadDetailRow = LeadRow & {
   email: string | null;
@@ -173,6 +175,7 @@ type LeadDetailRow = LeadRow & {
   timeframe: string | null;
   motivation: string | null;
   lead_score: number | null;
+  automation_enabled: boolean | null;
 };
 
 /**
@@ -207,6 +210,7 @@ export async function fetchLeadDetail(
       timeframe: row.timeframe,
       motivation: row.motivation,
       leadScore: row.lead_score,
+      automationEnabled: row.automation_enabled !== false,
       qualification: q
         ? {
             budgetMin: q.budget_min,
@@ -333,6 +337,27 @@ export async function markLeadHandled(
   const { data, error } = await supabase
     .from('leads')
     .update({ last_contacted_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id');
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: null, reassigned: true };
+  return { error: null };
+}
+
+/**
+ * Agent takeover — stop BaMo automation for this lead and switch it to manual
+ * mode. Same write the CRM's takeover uses (api/leads/[id]/automation):
+ * automation_source='manual' so auto-enrollment respects the explicit choice,
+ * and the DB trigger trg_leads_automation_off_unenroll removes the lead from
+ * every active campaign/sequence. Re-enabling later does NOT auto re-enroll.
+ * Same zero-row reassignment detection as markLeadHandled.
+ */
+export async function takeoverLead(
+  id: string,
+): Promise<{ error: string | null; reassigned?: boolean }> {
+  const { data, error } = await supabase
+    .from('leads')
+    .update({ automation_enabled: false, automation_source: 'manual' })
     .eq('id', id)
     .select('id');
   if (error) return { error: error.message };

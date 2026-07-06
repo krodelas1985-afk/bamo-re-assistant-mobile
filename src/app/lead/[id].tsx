@@ -21,7 +21,7 @@ import {
   fetchConversation,
   fetchLeadDetail,
   fetchMyFbPageId,
-  markLeadHandled,
+  takeoverLead,
 } from '@/lib/leads';
 
 const peso = (n: number) => `₱${n.toLocaleString('en-PH')}`;
@@ -144,9 +144,9 @@ export default function LeadProfileScreen() {
     }, [load]),
   );
 
-  const onMarkHandled = useCallback(async () => {
+  const doTakeover = useCallback(async () => {
     if (!lead) return;
-    const { error: e, reassigned } = await markLeadHandled(lead.id);
+    const { error: e, reassigned } = await takeoverLead(lead.id);
     if (reassigned) {
       Alert.alert(
         'Lead reassigned',
@@ -159,8 +159,22 @@ export default function LeadProfileScreen() {
       Alert.alert('Could not update', e);
       return;
     }
-    router.back();
+    // Stay on the profile — the agent takes over to message the lead next.
+    setLead((prev) => (prev ? { ...prev, automationEnabled: false } : prev));
   }, [lead, router]);
+
+  const onTakeover = useCallback(() => {
+    if (!lead) return;
+    Alert.alert(
+      `Take over ${lead.name}?`,
+      'BaMo automation will stop for this lead — no more auto-replies or follow-up sequences. ' +
+        'The lead switches to manual mode and you handle the conversation from here.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take over', onPress: doTakeover },
+      ],
+    );
+  }, [lead, doTakeover]);
 
   const canMessenger = !!messengerInboxUrl(fbPageId, lead?.messengerId ?? null);
 
@@ -208,7 +222,22 @@ export default function LeadProfileScreen() {
               <View style={styles.summaryBox}>
                 <Text style={styles.summaryText}>{lead.summary}</Text>
               </View>
-              <Button label="Mark handled" variant="secondary" small onPress={onMarkHandled} />
+              {lead.automationEnabled ? (
+                <>
+                  <Button label="Takeover" small onPress={onTakeover} />
+                  <Text style={styles.takeoverNote}>
+                    Stops BaMo automation for this lead and switches it to manual mode — you
+                    handle the replies from here.
+                  </Text>
+                </>
+              ) : (
+                <View style={styles.manualBox}>
+                  <Ionicons name="hand-left-outline" size={16} color={BrandColors.orangeDark} />
+                  <Text style={styles.manualText}>
+                    Manual mode — BaMo automation is off. This lead is all yours.
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Details */}
@@ -348,6 +377,24 @@ const styles = StyleSheet.create({
   summaryText: {
     ...TypeScale.body,
     color: BrandColors.textBody,
+  },
+  takeoverNote: {
+    ...TypeScale.helper,
+    color: BrandColors.textMuted,
+    textAlign: 'center',
+  },
+  manualBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: BrandColors.cream200,
+    borderRadius: Radii.button,
+    padding: 12,
+  },
+  manualText: {
+    ...TypeScale.bodySmall,
+    color: BrandColors.textSecondary,
+    flex: 1,
   },
   detailRow: {
     flexDirection: 'row',
