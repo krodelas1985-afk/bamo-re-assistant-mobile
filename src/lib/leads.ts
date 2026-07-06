@@ -162,11 +162,23 @@ export async function fetchLeadStats(): Promise<LeadStats> {
   return { newThisWeek, hot, ready, forViewing };
 }
 
-/** Mark a lead as handled by the agent (records contact time). */
-export async function markLeadHandled(id: string): Promise<{ error: string | null }> {
-  const { error } = await supabase
+/**
+ * Mark a lead as handled by the agent (records contact time).
+ *
+ * If the lead was reassigned to another agent since this list was loaded, RLS
+ * hides the row and the UPDATE silently matches zero rows (no error). We ask for
+ * the affected rows back so the caller can tell the difference and show a
+ * friendly "reassigned" message instead of a false success.
+ */
+export async function markLeadHandled(
+  id: string,
+): Promise<{ error: string | null; reassigned?: boolean }> {
+  const { data, error } = await supabase
     .from('leads')
     .update({ last_contacted_at: new Date().toISOString() })
-    .eq('id', id);
-  return { error: error ? error.message : null };
+    .eq('id', id)
+    .select('id');
+  if (error) return { error: error.message };
+  if (!data || data.length === 0) return { error: null, reassigned: true };
+  return { error: null };
 }

@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
 const ITEMS = [
+  { icon: 'notifications-outline', title: 'Activity', subtitle: 'Lead assignments & handoffs', route: '/activity' },
   { icon: 'share-social-outline', title: 'Social Media', subtitle: 'Auto-posting, posts & videos', route: '/social' },
   { icon: 'navigate-outline', title: 'Ads Management', subtitle: 'Performance, AI report, campaigns', route: '/ads' },
   { icon: 'globe-outline', title: 'My Website', subtitle: 'Your agent website, visits & leads', route: '/website' },

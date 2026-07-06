@@ -65,7 +65,15 @@ export default function LeadsScreen() {
 
   const onMarkHandled = useCallback(async (lead: Lead) => {
     setLeads((prev) => prev.filter((l) => l.id !== lead.id)); // optimistic
-    const { error: e } = await markLeadHandled(lead.id);
+    const { error: e, reassigned } = await markLeadHandled(lead.id);
+    if (reassigned) {
+      Alert.alert(
+        'Lead reassigned',
+        `${lead.name} is no longer assigned to you — it was handed to another agent.`,
+      );
+      load(); // resync the list from RLS
+      return;
+    }
     if (e) {
       Alert.alert('Could not update', e);
       load(); // revert by re-fetching
