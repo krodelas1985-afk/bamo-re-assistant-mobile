@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "205100656365",
+    "project_id": "bamo-f75e7",
+    "storage_bucket": "bamo-f75e7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:205100656365:android:1c53d7f0c3e40688e68ee4",
+        "android_client_info": {
+          "package_name": "com.bamo.reassistant"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBN5xwy6CT--5H-DX9OcGnAeDvpsFTwzXU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

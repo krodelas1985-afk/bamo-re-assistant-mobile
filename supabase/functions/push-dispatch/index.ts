@@ -9,7 +9,10 @@
 // The in-app row already exists regardless — this function only governs PUSH.
 //
 // Deploy: supabase functions deploy push-dispatch --no-verify-jwt
-// Env (edge secrets): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PUSH_DISPATCH_SECRET
+// Auth: the caller (pg_cron via pg_net) presents x-dispatch-secret; we validate
+// it against a Vault-held secret through the check_push_dispatch_secret() RPC,
+// so no hand-set edge secret is required. Env SUPABASE_URL /
+// SUPABASE_SERVICE_ROLE_KEY are auto-injected by the platform.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -40,15 +43,16 @@ function inManilaQuietHours(now: Date): boolean {
 }
 
 Deno.serve(async (req) => {
-  const secret = req.headers.get('x-dispatch-secret');
-  if (secret !== Deno.env.get('PUSH_DISPATCH_SECRET')) {
-    return new Response('unauthorized', { status: 401 });
-  }
-
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
+
+  const secret = req.headers.get('x-dispatch-secret') ?? '';
+  const { data: authorized } = await supabase.rpc('check_push_dispatch_secret', { p: secret });
+  if (authorized !== true) {
+    return new Response('unauthorized', { status: 401 });
+  }
 
   const quiet = inManilaQuietHours(new Date());
 

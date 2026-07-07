@@ -2,6 +2,7 @@ import { Session } from '@supabase/supabase-js';
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 import { hasSubmittedOnboarding } from '@/lib/onboarding';
+import { registerForPushNotifications, removeMyPushToken } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 
 export type Profile = {
@@ -68,6 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [session?.user?.id]);
 
+  // Register this device for push once we have an authenticated user.
+  useEffect(() => {
+    if (session?.user?.id) registerForPushNotifications(session.user.id);
+  }, [session?.user?.id]);
+
   const refreshOnboarding = async () => {
     if (!session?.user) return;
     setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, profile));
@@ -79,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    await removeMyPushToken(); // drop this device's token while still authenticated
     await supabase.auth.signOut();
   };
 

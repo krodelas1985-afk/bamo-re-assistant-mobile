@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.bamo.reassistant",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -46,7 +47,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "color": "#E67E22"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
