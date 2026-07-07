@@ -1,0 +1,138 @@
+// push-dispatch — sends queued in-app notifications to devices via Expo Push.
+//
+// Invoked on a schedule (pg_cron → net.http_post, every minute) rather than per
+// insert, so the notifications-insert path stays trigger-light. Each run drains
+// notifications where pushed_at IS NULL, applies per-user preferences + Manila
+// quiet hours, sends through the Expo Push Service, stamps pushed_at, and prunes
+// tokens that Expo reports as DeviceNotRegistered.
+//
+// The in-app row already exists regardless — this function only governs PUSH.
+//
+// Deploy: supabase functions deploy push-dispatch --no-verify-jwt
+// Env (edge secrets): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PUSH_DISPATCH_SECRET
+
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const MANILA_TZ = 'Asia/Manila';
+
+// Which types push at all, whether they respect quiet hours, the pref column
+// that gates them, and the Android channel to deliver on.
+const POLICY: Record<
+  string,
+  { pref: string | null; respectsQuiet: boolean; channel: string; priority: 'default' | 'high' }
+> = {
+  lead_assigned:            { pref: 'lead_assigned',         respectsQuiet: true,  channel: 'leads',        priority: 'high' },
+  lead_reassigned_away:     { pref: null,                    respectsQuiet: true,  channel: 'general',      priority: 'default' }, // in-app only
+  lead_hot:                 { pref: 'lead_hot',              respectsQuiet: false, channel: 'leads',        priority: 'high' },   // punches through
+  lead_warm:                { pref: 'lead_warm',             respectsQuiet: true,  channel: 'leads',        priority: 'high' },
+  appointment_booked:       { pref: 'appointment_reminders', respectsQuiet: true,  channel: 'appointments', priority: 'high' },
+  appointment_reminder_day: { pref: 'appointment_reminders', respectsQuiet: true,  channel: 'appointments', priority: 'high' },
+  appointment_reminder_hour:{ pref: 'appointment_reminders', respectsQuiet: false, channel: 'appointments', priority: 'high' },
+};
+
+function inManilaQuietHours(now: Date): boolean {
+  // 21:00–06:59 PHT
+  const hour = Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: MANILA_TZ, hour: '2-digit', hour12: false }).format(now),
+  );
+  return hour >= 21 || hour < 7;
+}
+
+Deno.serve(async (req) => {
+  const secret = req.headers.get('x-dispatch-secret');
+  if (secret !== Deno.env.get('PUSH_DISPATCH_SECRET')) {
+    return new Response('unauthorized', { status: 401 });
+  }
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+
+  const quiet = inManilaQuietHours(new Date());
+
+  // Drain a batch of unpushed notifications (oldest first).
+  const { data: notifs, error } = await supabase
+    .from('notifications')
+    .select('id, user_id, type, title, body, data')
+    .is('pushed_at', null)
+    .order('created_at', { ascending: true })
+    .limit(200);
+
+  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (!notifs || notifs.length === 0) return Response.json({ sent: 0, considered: 0 });
+
+  // Preload preferences + tokens for the distinct recipients in this batch.
+  const userIds = [...new Set(notifs.map((n) => n.user_id))];
+  const [{ data: prefRows }, { data: tokenRows }] = await Promise.all([
+    supabase.from('notification_preferences').select('*').in('user_id', userIds),
+    supabase.from('push_tokens').select('user_id, expo_push_token').in('user_id', userIds),
+  ]);
+  const prefs = new Map((prefRows ?? []).map((p) => [p.user_id, p]));
+  const tokensByUser = new Map<string, string[]>();
+  for (const t of tokenRows ?? []) {
+    const arr = tokensByUser.get(t.user_id) ?? [];
+    arr.push(t.expo_push_token);
+    tokensByUser.set(t.user_id, arr);
+  }
+
+  const messages: { to: string; title: string; body: string; data: unknown; channelId: string; priority: string }[] = [];
+  const pushedIds: string[] = [];   // stamp regardless of send (dispatched or intentionally skipped)
+  const heldIds: string[] = [];     // quiet-hours hold → leave null, retry next run
+
+  for (const n of notifs) {
+    const policy = POLICY[n.type];
+    if (!policy) { pushedIds.push(n.id); continue; }               // unknown type → in-app only
+
+    // quiet-hours hold (in-app row already visible; just defer the push)
+    if (policy.respectsQuiet && quiet) { heldIds.push(n.id); continue; }
+
+    const pref = prefs.get(n.user_id);
+    // default ON when no pref row exists yet
+    const enabled = policy.pref === null ? false : (pref ? pref[policy.pref] !== false : true);
+    if (!enabled) { pushedIds.push(n.id); continue; }              // pref off / no-push type
+
+    const tokens = tokensByUser.get(n.user_id) ?? [];
+    if (tokens.length === 0) { pushedIds.push(n.id); continue; }   // no device registered
+
+    for (const to of tokens) {
+      messages.push({
+        to, title: n.title, body: n.body ?? '', data: n.data,
+        channelId: policy.channel, priority: policy.priority,
+      });
+    }
+    pushedIds.push(n.id);
+  }
+
+  // Send to Expo in chunks of 100.
+  let sent = 0;
+  for (let i = 0; i < messages.length; i += 100) {
+    const chunk = messages.slice(i, i + 100);
+    try {
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(chunk),
+      });
+      const json = await res.json();
+      const tickets = json?.data ?? [];
+      for (let k = 0; k < tickets.length; k++) {
+        const ticket = tickets[k];
+        if (ticket?.status === 'ok') { sent++; continue; }
+        if (ticket?.details?.error === 'DeviceNotRegistered') {
+          await supabase.from('push_tokens').delete().eq('expo_push_token', chunk[k].to);
+        }
+      }
+    } catch (_e) {
+      // network hiccup — leave those notifs stamped; next event re-engages. Do
+      // not block the batch.
+    }
+  }
+
+  if (pushedIds.length) {
+    await supabase.from('notifications').update({ pushed_at: new Date().toISOString() }).in('id', pushedIds);
+  }
+
+  return Response.json({ considered: notifs.length, sent, held: heldIds.length });
+});
