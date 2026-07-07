@@ -65,6 +65,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
         <Stack.Screen name="lead/[id]" />
+        <Stack.Screen name="notifications" />
         <Stack.Screen name="listing-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="appointment-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="website" />

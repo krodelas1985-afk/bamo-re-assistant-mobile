@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { NotificationBell } from '@/components/notification-bell';
 import { Screen } from '@/components/screen';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
@@ -43,7 +44,7 @@ export default function HomeScreen() {
   ];
 
   return (
-    <Screen>
+    <Screen headerRight={<NotificationBell />}>
       <View style={styles.greetingCard}>
         <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
         <Text style={styles.greetingName}>{displayName} 👋</Text>

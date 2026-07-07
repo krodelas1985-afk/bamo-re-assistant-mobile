@@ -13,17 +13,20 @@ export function Screen({
   children,
   showBaymo = true,
   onBack,
+  headerRight,
 }: {
   title?: string;
   children: ReactNode;
   showBaymo?: boolean;
   /** When set, the header shows a back chevron that calls this (e.g. router.back()). */
   onBack?: () => void;
+  /** Optional element pinned to the right of the header (e.g. a notification bell). */
+  headerRight?: ReactNode;
 }) {
   const router = useRouter();
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      {title || onBack ? (
+      {title || onBack || headerRight ? (
         <View style={styles.header}>
           {onBack ? (
             <Pressable onPress={onBack} hitSlop={12} style={styles.back}>
@@ -31,6 +34,7 @@ export function Screen({
             </Pressable>
           ) : null}
           {title ? <Text style={styles.headerTitle}>{title}</Text> : null}
+          {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
         </View>
       ) : null}
       <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView>
@@ -53,6 +57,9 @@ const styles = StyleSheet.create({
   },
   back: {
     marginLeft: -6,
+  },
+  headerRight: {
+    marginLeft: 'auto',
   },
   headerTitle: {
     ...TypeScale.h3,

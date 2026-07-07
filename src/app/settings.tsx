@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
@@ -9,11 +9,26 @@ import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 import {
+  DEFAULT_PREFS,
+  fetchPreferences,
+  NotificationPrefs,
+  savePreferences,
+} from '@/lib/notifications';
+import {
   changePassword,
   fetchWorkspaceName,
   requestAccountDeletion,
   updateProfile,
 } from '@/lib/settings';
+
+const NOTIF_TOGGLES: { key: keyof NotificationPrefs; label: string; hint: string }[] = [
+  { key: 'lead_assigned', label: 'Lead assignments', hint: 'When a lead is assigned to you' },
+  { key: 'lead_hot', label: 'Hot leads', hint: 'High-intent leads, ready to talk' },
+  { key: 'lead_warm', label: 'Warm leads', hint: 'Leads warming up' },
+  { key: 'appointment_reminders', label: 'Appointment reminders', hint: 'Viewings & calls, 24h and 1h before' },
+  { key: 'ads_updates', label: 'Ads updates', hint: 'Campaign & report alerts' },
+  { key: 'quiet_hours', label: 'Quiet hours (9 PM–7 AM)', hint: 'Hold non-urgent pushes overnight — hot leads still come through' },
+];
 
 const ROLE_LABELS: Record<string, string> = {
   baymo_admin: 'BaMo Admin',
@@ -39,9 +54,28 @@ export default function SettingsScreen() {
   const [deleteNote, setDeleteNote] = useState('');
   const [deleteRequested, setDeleteRequested] = useState(false);
 
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+
   useEffect(() => {
     if (clientId) fetchWorkspaceName().then(setWorkspace);
   }, [clientId]);
+
+  useEffect(() => {
+    fetchPreferences().then(setPrefs);
+  }, []);
+
+  const togglePref = async (key: keyof NotificationPrefs, value: boolean) => {
+    const base = prefs ?? DEFAULT_PREFS;
+    const next = { ...base, [key]: value };
+    setPrefs(next); // optimistic
+    if (userId) {
+      const { error } = await savePreferences(userId, next);
+      if (error) {
+        setPrefs(base); // revert
+        Alert.alert('Could not save', error);
+      }
+    }
+  };
 
   useEffect(() => {
     setFullName(profile?.full_name ?? '');
@@ -140,9 +174,26 @@ export default function SettingsScreen() {
           <Ionicons name="notifications-outline" size={18} color={BrandColors.navy} />
           <Text style={styles.cardTitle}>Notifications</Text>
         </View>
+        {prefs ? (
+          NOTIF_TOGGLES.map((t) => (
+            <View key={t.key} style={styles.toggleRow}>
+              <View style={styles.toggleText}>
+                <Text style={styles.toggleLabel}>{t.label}</Text>
+                <Text style={styles.toggleHint}>{t.hint}</Text>
+              </View>
+              <Switch
+                value={prefs[t.key]}
+                onValueChange={(v) => togglePref(t.key, v)}
+                trackColor={{ true: BrandColors.orange, false: BrandColors.borderDark }}
+                thumbColor={BrandColors.white}
+              />
+            </View>
+          ))
+        ) : (
+          <ActivityIndicator color={BrandColors.navy} />
+        )}
         <Text style={styles.muted}>
-          You'll see updates and approval reminders right in the app. Push notifications are
-          coming soon.
+          Also allow notifications for BaMo in your phone&apos;s settings to receive pushes.
         </Text>
       </View>
 
@@ -212,6 +263,15 @@ const styles = StyleSheet.create({
     ...TypeScale.bodySmall,
     color: BrandColors.textBody,
   },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  toggleText: { flex: 1, gap: 1 },
+  toggleLabel: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
+  toggleHint: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
   deleteButton: {
     borderColor: BrandColors.error,
   },
