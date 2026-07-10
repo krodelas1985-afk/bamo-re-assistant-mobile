@@ -8,6 +8,8 @@
  * is set, otherwise OpenAI gpt-4o. JWT-verified. Keys never ship in the app.
  */
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -51,6 +53,33 @@ Deno.serve(async (req) => {
   const fields = payload.fields ?? {};
   if (!details && Object.keys(fields).length === 0) {
     return j({ error: 'Provide some property details to generate a listing.' }, 400);
+  }
+
+  // Freemium AI cap: listing generation counts against the monthly quota. Resolve
+  // the caller's workspace, then spend a credit. Fail-open on any infra error.
+  const admin = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('client_id')
+    .eq('id', uid)
+    .maybeSingle();
+  if (profile?.client_id) {
+    try {
+      const { data: credit, error: creditErr } = await admin.rpc('consume_ai_credit', {
+        p_client_id: profile.client_id,
+      });
+      if (!creditErr && credit && credit.allowed === false) {
+        return j(
+          { error: 'AI limit reached', code: 'ai_limit_reached', used: credit.used, limit: credit.limit },
+          402,
+        );
+      }
+    } catch {
+      /* fail-open */
+    }
   }
 
   const system =

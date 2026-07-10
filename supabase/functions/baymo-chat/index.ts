@@ -68,6 +68,24 @@ Deno.serve(async (req) => {
     .eq('id', uid)
     .maybeSingle();
 
+  // Freemium AI cap: document generation counts against the monthly quota;
+  // ordinary chat does not. Fail-open so an infra hiccup never blocks the app.
+  if (task === 'document' && profile?.client_id) {
+    try {
+      const { data: credit, error: creditErr } = await admin.rpc('consume_ai_credit', {
+        p_client_id: profile.client_id,
+      });
+      if (!creditErr && credit && credit.allowed === false) {
+        return j(
+          { error: 'AI limit reached', code: 'ai_limit_reached', used: credit.used, limit: credit.limit },
+          402,
+        );
+      }
+    } catch {
+      /* fail-open */
+    }
+  }
+
   const agentName = (profile?.full_name ?? '').split(/\s+/)[0] || 'there';
 
   // Ground the assistant in the agent's real pipeline (RLS-equivalent scoping).

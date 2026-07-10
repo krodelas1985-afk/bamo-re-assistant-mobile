@@ -1,6 +1,7 @@
 import { BadgeTone } from '@/components/ui/badge';
 import { Listing } from '@/components/listing-card';
 import { supabase } from '@/lib/supabase';
+import { aiLimitMessage } from '@/lib/usage';
 
 /** Agent-authored listings, stored in the main BaMo project (table agent_listings). */
 
@@ -70,7 +71,15 @@ export async function createListing(
   const { error } = await supabase
     .from('agent_listings')
     .insert({ ...input, client_id: clientId, created_by: userId });
-  return { error: error ? error.message : null };
+  if (error) {
+    if (error.message.includes('listing_limit_reached')) {
+      return {
+        error: "You've reached your free plan's listing limit (3). Upgrade to publish more listings.",
+      };
+    }
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 /** Upload one photo to the public `listing-photos` bucket; returns its public URL. */
@@ -124,7 +133,7 @@ export async function generateListing(
   const { data, error } = await supabase.functions.invoke('generate-listing', {
     body: { details, fields },
   });
-  if (error) return { listing: null, error: error.message };
+  if (error) return { listing: null, error: (await aiLimitMessage(error)) ?? error.message };
   if (data?.error) return { listing: null, error: String(data.error) };
   return { listing: (data?.listing as GeneratedListing) ?? {}, error: null };
 }

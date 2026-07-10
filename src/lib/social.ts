@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { aiLimitMessage } from '@/lib/usage';
 
 /**
  * Social Media section data layer.
@@ -246,7 +247,7 @@ export async function generatePostContent(input: {
   instructions?: string | null;
 }): Promise<{ data: GeneratedPost | null; error: string | null }> {
   const { data, error } = await supabase.functions.invoke('generate-post-content', { body: input });
-  if (error) return { data: null, error: error.message };
+  if (error) return { data: null, error: (await aiLimitMessage(error)) ?? error.message };
   if (data?.error) return { data: null, error: String(data.error) };
   return { data: data as GeneratedPost, error: null };
 }

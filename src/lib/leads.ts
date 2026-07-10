@@ -540,7 +540,15 @@ export async function createLead(
     })
     .select('id')
     .single();
-  if (error) return { id: null, error: error.message };
+  if (error) {
+    if (error.message.includes('lead_limit_reached')) {
+      return {
+        id: null,
+        error: "You've reached your free plan's lead limit (30). Upgrade to add more leads.",
+      };
+    }
+    return { id: null, error: error.message };
+  }
   const leadId = (data as { id: string }).id;
 
   if (input.budgetMin != null || input.budgetMax != null || input.preferredLocation?.length) {

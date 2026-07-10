@@ -127,6 +127,22 @@ Deno.serve(async (req) => {
   if (!profile?.client_id) return j({ error: 'Your workspace is not linked yet.' }, 403);
   const clientId = profile.client_id;
 
+  // Freemium AI cap: content generation counts against the monthly quota.
+  // Fail-open so an infra hiccup never blocks the app.
+  try {
+    const { data: credit, error: creditErr } = await admin.rpc('consume_ai_credit', {
+      p_client_id: clientId,
+    });
+    if (!creditErr && credit && credit.allowed === false) {
+      return j(
+        { error: 'AI limit reached', code: 'ai_limit_reached', used: credit.used, limit: credit.limit },
+        402,
+      );
+    }
+  } catch {
+    /* fail-open */
+  }
+
   const { data: client } = await admin
     .from('clients')
     .select('name, company_name')

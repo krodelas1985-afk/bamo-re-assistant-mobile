@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { aiLimitMessage } from '@/lib/usage';
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 export type ChatTask = 'chat' | 'document';
@@ -16,7 +17,7 @@ export async function sendToBayMo(
   const { data, error } = await supabase.functions.invoke('baymo-chat', {
     body: { messages, task, document_type: documentType },
   });
-  if (error) return { reply: null, error: error.message };
+  if (error) return { reply: null, error: (await aiLimitMessage(error)) ?? error.message };
   if (data?.error) return { reply: null, error: String(data.error) };
   return { reply: (data?.reply as string) ?? '', error: null };
 }
