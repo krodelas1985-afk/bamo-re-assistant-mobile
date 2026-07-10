@@ -7,9 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { TagPill } from '@/components/ui/tag-pill';
 import { TextField } from '@/components/ui/text-field';
+import { UpgradeBanner } from '@/components/ui/upgrade-banner';
 import { useAuth } from '@/contexts/auth-context';
+import { useUsage } from '@/hooks/use-usage';
 import { BrandColors, TypeScale } from '@/constants/brand';
 import { LEAD_TYPE_OPTIONS, MANUAL_SOURCE_OPTIONS, createLead } from '@/lib/leads';
+import { atLimit } from '@/lib/usage';
 
 /** "4,500,000" / "4.5m" style input → number in pesos, or null. */
 function parseAmount(raw: string): number | null {
@@ -25,7 +28,9 @@ function parseAmount(raw: string): number | null {
 export default function NewLeadScreen() {
   const router = useRouter();
   const { profile, session } = useAuth();
+  const { usage } = useUsage();
   const clientId = profile?.client_id ?? null;
+  const leadsFull = atLimit(usage?.leads);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -93,6 +98,11 @@ export default function NewLeadScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {leadsFull && (
+          <UpgradeBanner
+            message={`You've reached your free plan's ${usage?.leads.limit}-lead limit. Upgrade to add more leads.`}
+          />
+        )}
         <TextField
           label="Name *"
           value={name}
@@ -195,7 +205,12 @@ export default function NewLeadScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button label={saving ? 'Saving…' : 'Add lead'} onPress={save} style={styles.footerBtn} />
+        <Button
+          label={leadsFull ? 'Lead limit reached' : saving ? 'Saving…' : 'Add lead'}
+          onPress={save}
+          disabled={leadsFull}
+          style={styles.footerBtn}
+        />
       </View>
     </SafeAreaView>
   );
