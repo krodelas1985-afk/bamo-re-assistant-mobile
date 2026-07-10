@@ -1,21 +1,40 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { LeadCard } from '@/components/lead-card';
+import { LeadFilterSheet } from '@/components/lead-filter-sheet';
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
 import { TagPill } from '@/components/ui/tag-pill';
-import { BrandColors, TypeScale } from '@/constants/brand';
+import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 import { messengerInboxUrl, openMessengerThread, openSms } from '@/lib/contact';
 import {
+  BUDGET_BUCKETS,
+  EMPTY_LEAD_FILTERS,
   Lead,
   LeadFilter,
+  LeadFilters,
+  LeadSort,
   LEAD_FILTERS,
+  SORT_OPTIONS,
+  countActiveFilters,
   fetchLeads,
   fetchMyFbPageId,
   markLeadHandled,
+  matchesAdvancedFilters,
   matchesFilter,
+  matchesSearch,
+  sortLeads,
 } from '@/lib/leads';
 
 const EMPTY_COPY: Record<LeadFilter, string> = {
@@ -31,6 +50,10 @@ export default function LeadsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<LeadFilter>('all');
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<LeadFilters>(EMPTY_LEAD_FILTERS);
+  const [sort, setSort] = useState<LeadSort>('recent');
+  const [sheetOpen, setSheetOpen] = useState(false);
   // The client's FB Page ID, used to deep-link Messenger leads into the Page
   // inbox. Fetched once (all of this user's leads belong to the same Page).
   const [fbPageId, setFbPageId] = useState<string | null>(null);
@@ -55,7 +78,36 @@ export default function LeadsScreen() {
     }, [load]),
   );
 
-  const visible = useMemo(() => leads.filter((l) => matchesFilter(l, filter)), [leads, filter]);
+  // Sources actually present in this workspace's leads drive the Source filter.
+  const sourceOptions = useMemo(
+    () => [...new Set(leads.map((l) => l.source))].sort(),
+    [leads],
+  );
+
+  // Quick pill + search apply first; the sheet's live count reuses this base.
+  const base = useMemo(
+    () => leads.filter((l) => matchesFilter(l, filter) && matchesSearch(l, search)),
+    [leads, filter, search],
+  );
+
+  const visible = useMemo(
+    () => sortLeads(base.filter((l) => matchesAdvancedFilters(l, filters)), sort),
+    [base, filters, sort],
+  );
+
+  const activeCount = countActiveFilters(filters);
+  const filtering = activeCount > 0 || search.trim().length > 0 || sort !== 'recent';
+
+  const countFor = useCallback(
+    (f: LeadFilters) => base.filter((l) => matchesAdvancedFilters(l, f)).length,
+    [base],
+  );
+
+  const clearAll = () => {
+    setFilters(EMPTY_LEAD_FILTERS);
+    setSort('recent');
+    setSearch('');
+  };
 
   // Default "Message" action: Messenger leads open the client's FB Page inbox
   // (see lib/contact.ts); non-Messenger leads fall back to SMS.
@@ -105,6 +157,25 @@ export default function LeadsScreen() {
 
   return (
     <Screen title="Leads">
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={18} color={BrandColors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search name, email, or phone"
+          placeholderTextColor={BrandColors.textMuted}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <Pressable onPress={() => setSearch('')} hitSlop={8}>
+            <Ionicons name="close-circle" size={18} color={BrandColors.textMuted} />
+          </Pressable>
+        )}
+      </View>
+
       <View style={styles.filters}>
         {LEAD_FILTERS.map((f) => (
           <TagPill
@@ -114,7 +185,18 @@ export default function LeadsScreen() {
             onPress={() => setFilter(f.key)}
           />
         ))}
+        <Pressable style={styles.filterBtn} onPress={() => setSheetOpen(true)}>
+          <Ionicons name="options-outline" size={16} color={BrandColors.navy} />
+          <Text style={styles.filterBtnText}>Filters</Text>
+          {activeCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeCount}</Text>
+            </View>
+          )}
+        </Pressable>
       </View>
+
+      <ActiveFilterChips filters={filters} sort={sort} onFilters={setFilters} onSort={setSort} />
 
       {loading ? (
         <View style={styles.center}>
@@ -128,7 +210,12 @@ export default function LeadsScreen() {
         </View>
       ) : visible.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>{EMPTY_COPY[filter]}</Text>
+          <Text style={styles.emptyText}>
+            {filtering
+              ? 'No leads match your search or filters.'
+              : EMPTY_COPY[filter]}
+          </Text>
+          {filtering && <Button label="Clear filters" small onPress={clearAll} style={styles.retry} />}
         </View>
       ) : (
         visible.map((lead) => (
@@ -141,16 +228,155 @@ export default function LeadsScreen() {
           />
         ))
       )}
+
+      <LeadFilterSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        filters={filters}
+        sort={sort}
+        sourceOptions={sourceOptions}
+        countFor={countFor}
+        onApply={(f, s) => {
+          setFilters(f);
+          setSort(s);
+        }}
+      />
     </Screen>
   );
 }
 
+/** Removable chips summarizing the applied sheet selections. */
+function ActiveFilterChips({
+  filters,
+  sort,
+  onFilters,
+  onSort,
+}: {
+  filters: LeadFilters;
+  sort: LeadSort;
+  onFilters: (f: LeadFilters) => void;
+  onSort: (s: LeadSort) => void;
+}) {
+  const chips: { key: string; label: string; onRemove: () => void }[] = [];
+
+  const drop = (field: keyof LeadFilters, value: string) =>
+    onFilters({
+      ...filters,
+      [field]: (filters[field] as string[]).filter((v) => v !== value),
+    });
+
+  filters.temperatures.forEach((v) =>
+    chips.push({ key: `t-${v}`, label: v, onRemove: () => drop('temperatures', v) }),
+  );
+  filters.statuses.forEach((v) =>
+    chips.push({ key: `s-${v}`, label: v, onRemove: () => drop('statuses', v) }),
+  );
+  filters.sources.forEach((v) =>
+    chips.push({ key: `src-${v}`, label: v, onRemove: () => drop('sources', v) }),
+  );
+  filters.leadTypes.forEach((v) =>
+    chips.push({ key: `lt-${v}`, label: v, onRemove: () => drop('leadTypes', v) }),
+  );
+  filters.budgets.forEach((v) => {
+    const label = BUDGET_BUCKETS.find((b) => b.key === v)?.label ?? v;
+    chips.push({ key: `b-${v}`, label, onRemove: () => drop('budgets', v) });
+  });
+  if (filters.timeframe.trim())
+    chips.push({
+      key: 'tf',
+      label: `Timeframe: ${filters.timeframe.trim()}`,
+      onRemove: () => onFilters({ ...filters, timeframe: '' }),
+    });
+  if (filters.currentLocation.trim())
+    chips.push({
+      key: 'cl',
+      label: `From: ${filters.currentLocation.trim()}`,
+      onRemove: () => onFilters({ ...filters, currentLocation: '' }),
+    });
+  if (filters.preferredLocation.trim())
+    chips.push({
+      key: 'pl',
+      label: `Wants: ${filters.preferredLocation.trim()}`,
+      onRemove: () => onFilters({ ...filters, preferredLocation: '' }),
+    });
+  if (sort !== 'recent')
+    chips.push({
+      key: 'sort',
+      label: SORT_OPTIONS.find((s) => s.key === sort)?.label ?? sort,
+      onRemove: () => onSort('recent'),
+    });
+
+  if (chips.length === 0) return null;
+  return (
+    <View style={styles.activeChips}>
+      {chips.map((c) => (
+        <Pressable key={c.key} style={styles.activeChip} onPress={c.onRemove}>
+          <Text style={styles.activeChipText}>{c.label}</Text>
+          <Ionicons name="close" size={13} color={BrandColors.navy} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: BrandColors.white,
+    borderWidth: 1,
+    borderColor: BrandColors.border,
+    borderRadius: Radii.button,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
+  },
+  searchInput: {
+    ...TypeScale.body,
+    flex: 1,
+    color: BrandColors.textHeading,
+    paddingVertical: 8,
+  },
   filters: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 8,
   },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginLeft: 'auto',
+    backgroundColor: BrandColors.white,
+    borderWidth: 1,
+    borderColor: BrandColors.borderDark,
+    borderRadius: Radii.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  filterBtnText: { ...TypeScale.label, color: BrandColors.navy },
+  filterBadge: {
+    backgroundColor: BrandColors.orange,
+    borderRadius: Radii.pill,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  filterBadgeText: { ...TypeScale.labelSmall, color: BrandColors.white },
+  activeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: BrandColors.cream200,
+    borderRadius: Radii.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  activeChipText: { ...TypeScale.labelSmall, color: BrandColors.navy },
   center: {
     alignItems: 'center',
     justifyContent: 'center',

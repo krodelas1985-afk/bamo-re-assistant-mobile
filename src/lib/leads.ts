@@ -7,23 +7,40 @@ import { supabase } from '@/lib/supabase';
  * pass client_id from the app.
  */
 
+/**
+ * Qualification snapshot embedded on each lead row (budget filters).
+ * lead_qualifications.lead_id is UNIQUE, so PostgREST returns a single object
+ * (or null), not an array.
+ */
+type QualEmbedRow = {
+  budget_min: number | null;
+  budget_max: number | null;
+  preferred_location: string[] | null;
+};
+
 /** Raw columns we read from `leads`. */
 type LeadRow = {
   id: string;
   name: string;
   phone: string | null;
+  email: string | null;
   source: string | null;
   status: string | null;
+  lead_type: string | null;
   lead_temperature: string | null;
+  current_location: string | null;
+  timeframe: string | null;
   conversation_summary: string | null;
   messenger_id: string | null;
   last_message_at: string | null;
   last_inbound_at: string | null;
   created_at: string | null;
+  lead_qualifications?: QualEmbedRow | null;
 };
 
 const SELECT =
-  'id, name, phone, source, status, lead_temperature, conversation_summary, messenger_id, last_message_at, last_inbound_at, created_at';
+  'id, name, phone, email, source, status, lead_type, lead_temperature, current_location, timeframe, conversation_summary, messenger_id, last_message_at, last_inbound_at, created_at, ' +
+  'lead_qualifications(budget_min, budget_max, preferred_location)';
 
 /** Card model consumed by the Leads screen. */
 export type Lead = {
@@ -39,6 +56,15 @@ export type Lead = {
   rawStatus: string | null;
   messengerId: string | null;
   phone: string | null;
+  email: string | null;
+  leadType: string | null;
+  currentLocation: string | null;
+  timeframe: string | null;
+  createdAt: string | null;
+  // Latest qualification snapshot (null when BaMo hasn't qualified the lead yet)
+  budgetMin: number | null;
+  budgetMax: number | null;
+  preferredLocation: string[] | null;
 };
 
 export type LeadFilter = 'hot' | 'ready' | 'viewing' | 'all';
@@ -57,6 +83,135 @@ export const LEAD_FILTERS: { key: LeadFilter; label: string }[] = [
 ];
 
 const VIEWING_STATUS = 'Won'; // interim proxy — see note above
+
+// ── Advanced filters, search & sort ─────────────────────────────────────────
+// Option lists mirror the DB check constraints (leads_temperature_chk,
+// leads_status_chk, leads_lead_type_chk) — keep in sync if those change.
+
+export const TEMPERATURE_OPTIONS = ['New', 'Hot', 'Warm', 'Cold'] as const;
+
+export const STATUS_OPTIONS = [
+  'New',
+  'In Contact',
+  'Qualifying',
+  'Qualified',
+  'Viewing',
+  'Negotiating',
+  'Nurture',
+  'Won',
+  'Lost',
+] as const;
+
+export const LEAD_TYPE_OPTIONS = [
+  'Buyer',
+  'Seller',
+  'Agent',
+  'Developer',
+  'Affiliate',
+  'Others',
+] as const;
+
+export const BUDGET_BUCKETS = [
+  { key: 'under2m', label: 'Below ₱2M', min: 0, max: 2_000_000 },
+  { key: '2to5m', label: '₱2M–₱5M', min: 2_000_000, max: 5_000_000 },
+  { key: '5to10m', label: '₱5M–₱10M', min: 5_000_000, max: 10_000_000 },
+  { key: 'over10m', label: '₱10M+', min: 10_000_000, max: null },
+] as const;
+
+export type BudgetBucketKey = (typeof BUDGET_BUCKETS)[number]['key'];
+
+export type LeadSort = 'recent' | 'newest' | 'oldest';
+
+export const SORT_OPTIONS: { key: LeadSort; label: string }[] = [
+  { key: 'recent', label: 'Recent activity' },
+  { key: 'newest', label: 'Newest first' },
+  { key: 'oldest', label: 'Oldest first' },
+];
+
+/** Advanced filter selections. Arrays are OR within a section, AND across sections. */
+export type LeadFilters = {
+  temperatures: string[];
+  statuses: string[];
+  sources: string[];
+  leadTypes: string[];
+  budgets: BudgetBucketKey[];
+  timeframe: string;
+  currentLocation: string;
+  preferredLocation: string;
+};
+
+export const EMPTY_LEAD_FILTERS: LeadFilters = {
+  temperatures: [],
+  statuses: [],
+  sources: [],
+  leadTypes: [],
+  budgets: [],
+  timeframe: '',
+  currentLocation: '',
+  preferredLocation: '',
+};
+
+/** How many filter selections are active (for the Filters button badge). */
+export function countActiveFilters(f: LeadFilters): number {
+  return (
+    f.temperatures.length +
+    f.statuses.length +
+    f.sources.length +
+    f.leadTypes.length +
+    f.budgets.length +
+    (f.timeframe.trim() ? 1 : 0) +
+    (f.currentLocation.trim() ? 1 : 0) +
+    (f.preferredLocation.trim() ? 1 : 0)
+  );
+}
+
+/** Name / email / phone search. Phone matches on digits only, so "0917 123" finds "0917-123-4567". */
+export function matchesSearch(lead: Lead, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (lead.name.toLowerCase().includes(q)) return true;
+  if (lead.email?.toLowerCase().includes(q)) return true;
+  const qDigits = q.replace(/\D/g, '');
+  if (qDigits.length >= 3 && lead.phone && lead.phone.replace(/\D/g, '').includes(qDigits))
+    return true;
+  return false;
+}
+
+/** Does the lead's qualified budget range overlap the bucket? Unknown budget never matches. */
+function matchesBudget(lead: Lead, bucketKey: BudgetBucketKey): boolean {
+  const bucket = BUDGET_BUCKETS.find((b) => b.key === bucketKey);
+  if (!bucket) return false;
+  const min = lead.budgetMin ?? lead.budgetMax;
+  const max = lead.budgetMax ?? lead.budgetMin;
+  if (min == null || max == null) return false;
+  return (bucket.max == null || min < bucket.max) && max >= bucket.min;
+}
+
+const textMatch = (value: string | null, query: string) =>
+  !!value && value.toLowerCase().includes(query.trim().toLowerCase());
+
+export function matchesAdvancedFilters(lead: Lead, f: LeadFilters): boolean {
+  if (f.temperatures.length && !f.temperatures.includes(lead.temperature ?? '')) return false;
+  if (f.statuses.length && !f.statuses.includes(lead.rawStatus ?? '')) return false;
+  if (f.sources.length && !f.sources.includes(lead.source)) return false;
+  if (f.leadTypes.length && !f.leadTypes.includes(lead.leadType ?? '')) return false;
+  if (f.budgets.length && !f.budgets.some((b) => matchesBudget(lead, b))) return false;
+  if (f.timeframe.trim() && !textMatch(lead.timeframe, f.timeframe)) return false;
+  if (f.currentLocation.trim() && !textMatch(lead.currentLocation, f.currentLocation)) return false;
+  if (
+    f.preferredLocation.trim() &&
+    !textMatch((lead.preferredLocation ?? []).join(', '), f.preferredLocation)
+  )
+    return false;
+  return true;
+}
+
+/** 'recent' keeps the server order (last message first); the others sort by created date. */
+export function sortLeads(leads: Lead[], sort: LeadSort): Lead[] {
+  if (sort === 'recent') return leads;
+  const dir = sort === 'newest' ? -1 : 1;
+  return [...leads].sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '') * dir);
+}
 
 export function matchesFilter(lead: Lead, filter: LeadFilter): boolean {
   switch (filter) {
@@ -110,6 +265,7 @@ function toLead(row: LeadRow): Lead {
   const summary =
     row.conversation_summary?.trim() ||
     `New ${row.source ?? 'lead'} — tap to review the conversation.`;
+  const qual = row.lead_qualifications;
   return {
     id: row.id,
     name: row.name,
@@ -122,6 +278,14 @@ function toLead(row: LeadRow): Lead {
     rawStatus: row.status,
     messengerId: row.messenger_id,
     phone: row.phone,
+    email: row.email,
+    leadType: row.lead_type,
+    currentLocation: row.current_location,
+    timeframe: row.timeframe,
+    createdAt: row.created_at,
+    budgetMin: qual?.budget_min ?? null,
+    budgetMax: qual?.budget_max ?? null,
+    preferredLocation: qual?.preferred_location ?? null,
   };
 }
 
@@ -141,9 +305,6 @@ export async function fetchMyFbPageId(): Promise<string | null> {
 
 /** Extra per-lead fields shown only on the Lead Profile screen. */
 export type LeadDetail = Lead & {
-  email: string | null;
-  currentLocation: string | null;
-  timeframe: string | null;
   motivation: string | null;
   leadScore: number | null;
   /** BaMo automation on/off. Null in the DB means ON (CRM treats `!== false` as on). */
@@ -166,13 +327,9 @@ export type LeadQualification = {
   unitPreferred: string | null;
 };
 
-const DETAIL_SELECT =
-  SELECT + ', email, current_location, timeframe, motivation, lead_score, automation_enabled';
+const DETAIL_SELECT = SELECT + ', motivation, lead_score, automation_enabled';
 
 type LeadDetailRow = LeadRow & {
-  email: string | null;
-  current_location: string | null;
-  timeframe: string | null;
   motivation: string | null;
   lead_score: number | null;
   automation_enabled: boolean | null;
@@ -205,9 +362,6 @@ export async function fetchLeadDetail(
   return {
     data: {
       ...toLead(row),
-      email: row.email,
-      currentLocation: row.current_location,
-      timeframe: row.timeframe,
       motivation: row.motivation,
       leadScore: row.lead_score,
       automationEnabled: row.automation_enabled !== false,
@@ -295,7 +449,7 @@ export async function fetchLeads(): Promise<{ data: Lead[]; error: string | null
     .order('created_at', { ascending: false })
     .limit(200);
   if (error) return { data: [], error: error.message };
-  return { data: (data as LeadRow[]).map(toLead), error: null };
+  return { data: (data as unknown as LeadRow[]).map(toLead), error: null };
 }
 
 export type LeadStats = {
