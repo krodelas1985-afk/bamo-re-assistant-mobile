@@ -10,27 +10,32 @@ import { router, Stack } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 import { AuthProvider } from '@/contexts/auth-context';
 
 SplashScreen.preventAutoHideAsync();
 
+// expo-notifications has no web implementation — calling it there throws.
+const PUSH_SUPPORTED = Platform.OS !== 'web';
+
 // Show notifications while the app is foregrounded.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+if (PUSH_SUPPORTED) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 /** Route a tapped notification to the screen named in its data.route. */
 function openFromNotification(response: Notifications.NotificationResponse | null) {
   const route = response?.notification.request.content.data?.route;
   if (typeof route === 'string' && route.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    router.push(route as any);
+    router.push(route as Parameters<typeof router.push>[0]);
   }
 }
 
@@ -50,6 +55,7 @@ export default function RootLayout() {
   // Deep-link on notification tap: warm taps via the listener, cold start via
   // the last response.
   useEffect(() => {
+    if (!PUSH_SUPPORTED) return;
     const sub = Notifications.addNotificationResponseReceivedListener(openFromNotification);
     Notifications.getLastNotificationResponseAsync().then(openFromNotification);
     return () => sub.remove();
@@ -65,6 +71,7 @@ export default function RootLayout() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
         <Stack.Screen name="lead/[id]" />
+        <Stack.Screen name="lead-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="listing-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="appointment-new" options={{ presentation: 'modal' }} />

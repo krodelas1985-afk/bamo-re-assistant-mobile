@@ -156,7 +156,14 @@ export default function LeadsScreen() {
   }, [load]);
 
   return (
-    <Screen title="Leads">
+    <Screen
+      title="Leads"
+      headerRight={
+        <Pressable style={styles.addBtn} onPress={() => router.push('/lead-new')}>
+          <Ionicons name="add" size={18} color={BrandColors.white} />
+          <Text style={styles.addBtnText}>Add lead</Text>
+        </Pressable>
+      }>
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color={BrandColors.textMuted} />
         <TextInput
@@ -320,6 +327,16 @@ function ActiveFilterChips({
 }
 
 const styles = StyleSheet.create({
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: BrandColors.orange,
+    borderRadius: Radii.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  addBtnText: { ...TypeScale.label, color: BrandColors.white },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

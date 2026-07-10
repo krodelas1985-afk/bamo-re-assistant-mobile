@@ -477,6 +477,84 @@ export async function fetchLeadStats(): Promise<LeadStats> {
   return { newThisWeek, hot, ready, forViewing };
 }
 
+/** Source choices offered when an agent adds a lead by hand. */
+export const MANUAL_SOURCE_OPTIONS = [
+  'Manual',
+  'Referral',
+  'Walk-in',
+  'Marketplace',
+  'Website',
+  'WhatsApp',
+  'Viber',
+  'Other',
+] as const;
+
+export type NewLeadInput = {
+  name: string;
+  phone: string | null;
+  email: string | null;
+  source: string;
+  leadType: string | null;
+  currentLocation: string | null;
+  timeframe: string | null;
+  /** Shown as the card summary (leads.conversation_summary). */
+  notes: string | null;
+  budgetMin: number | null;
+  budgetMax: number | null;
+  /** Comma-separated in the form; stored as text[] on lead_qualifications. */
+  preferredLocation: string[] | null;
+};
+
+/**
+ * Manually add a lead. Deliberate choices:
+ * - assigned_user_id = the creating user — agent-role RLS only shows assigned
+ *   leads, so without this an agent's own lead would vanish from their list.
+ * - lead_temperature 'New' (capitalized — leads_temperature_chk), overriding
+ *   the DB's 'Cold' default so hand-entered leads surface as fresh.
+ * - automation_source 'manual' so auto-enrollment never drags a hand-entered
+ *   lead into a Messenger sequence (they have no messenger_id anyway).
+ * - Budget / preferred location go to lead_qualifications (1 row per lead);
+ *   that insert is best-effort — the lead itself is already saved.
+ */
+export async function createLead(
+  clientId: string,
+  userId: string,
+  input: NewLeadInput,
+): Promise<{ id: string | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('leads')
+    .insert({
+      client_id: clientId,
+      assigned_user_id: userId,
+      name: input.name,
+      phone: input.phone,
+      email: input.email,
+      source: input.source,
+      lead_type: input.leadType,
+      current_location: input.currentLocation,
+      timeframe: input.timeframe,
+      conversation_summary: input.notes,
+      status: 'New',
+      lead_temperature: 'New',
+      automation_source: 'manual',
+    })
+    .select('id')
+    .single();
+  if (error) return { id: null, error: error.message };
+  const leadId = (data as { id: string }).id;
+
+  if (input.budgetMin != null || input.budgetMax != null || input.preferredLocation?.length) {
+    await supabase.from('lead_qualifications').insert({
+      client_id: clientId,
+      lead_id: leadId,
+      budget_min: input.budgetMin,
+      budget_max: input.budgetMax,
+      preferred_location: input.preferredLocation ?? [],
+    });
+  }
+  return { id: leadId, error: null };
+}
+
 /**
  * Mark a lead as handled by the agent (records contact time).
  *
