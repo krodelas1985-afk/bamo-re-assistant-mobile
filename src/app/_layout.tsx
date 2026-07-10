@@ -68,6 +68,9 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
+        <Stack.Screen name="signup" />
+        <Stack.Screen name="verify-email" />
+        <Stack.Screen name="forgot-password" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="chat" options={{ presentation: 'modal' }} />
         <Stack.Screen name="lead/[id]" />

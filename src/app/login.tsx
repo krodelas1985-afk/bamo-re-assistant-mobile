@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Redirect } from 'expo-router';
+import { Link, Redirect } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -100,9 +100,16 @@ export default function LoginScreen() {
               style={styles.submit}
             />
 
-            <Text style={styles.helper}>
-              No account yet? Your BaMo onboarding specialist sets this up for you.
-            </Text>
+            <Link href="/forgot-password" style={styles.forgot}>
+              Forgot password?
+            </Link>
+
+            <View style={styles.footer}>
+              <Text style={styles.helper}>No account yet? </Text>
+              <Link href="/signup" style={styles.link}>
+                Create one — it&apos;s free
+              </Link>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -179,9 +186,26 @@ const styles = StyleSheet.create({
   submit: {
     marginTop: 4,
   },
+  forgot: {
+    ...TypeScale.label,
+    color: BrandColors.navy,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
   helper: {
     ...TypeScale.helper,
     color: BrandColors.textMuted,
     textAlign: 'center',
+  },
+  link: {
+    ...TypeScale.bodyBold,
+    color: BrandColors.navy,
   },
 });
