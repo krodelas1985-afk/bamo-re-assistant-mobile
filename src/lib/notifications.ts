@@ -15,6 +15,7 @@ export type NotificationType =
   | 'appointment_booked'
   | 'appointment_reminder_day'
   | 'appointment_reminder_hour'
+  | 'task_assigned'
   | string;
 
 export type AppNotification = {
@@ -82,6 +83,7 @@ export type NotificationPrefs = {
   lead_hot: boolean;
   lead_warm: boolean;
   appointment_reminders: boolean;
+  tasks: boolean;
   ads_updates: boolean;
   quiet_hours: boolean;
 };
@@ -91,6 +93,7 @@ export const DEFAULT_PREFS: NotificationPrefs = {
   lead_hot: true,
   lead_warm: true,
   appointment_reminders: true,
+  tasks: true,
   ads_updates: true,
   quiet_hours: true,
 };
@@ -99,7 +102,7 @@ export const DEFAULT_PREFS: NotificationPrefs = {
 export async function fetchPreferences(): Promise<NotificationPrefs> {
   const { data } = await supabase
     .from('notification_preferences')
-    .select('lead_assigned, lead_hot, lead_warm, appointment_reminders, ads_updates, quiet_hours')
+    .select('lead_assigned, lead_hot, lead_warm, appointment_reminders, tasks, ads_updates, quiet_hours')
     .maybeSingle();
   return { ...DEFAULT_PREFS, ...((data as Partial<NotificationPrefs>) ?? {}) };
 }

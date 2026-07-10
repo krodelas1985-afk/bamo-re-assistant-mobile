@@ -32,6 +32,7 @@ const POLICY: Record<
   appointment_booked:       { pref: 'appointment_reminders', respectsQuiet: true,  channel: 'appointments', priority: 'high' },
   appointment_reminder_day: { pref: 'appointment_reminders', respectsQuiet: true,  channel: 'appointments', priority: 'high' },
   appointment_reminder_hour:{ pref: 'appointment_reminders', respectsQuiet: false, channel: 'appointments', priority: 'high' },
+  task_assigned:            { pref: 'tasks',                 respectsQuiet: true,  channel: 'general',      priority: 'default' },
 };
 
 function inManilaQuietHours(now: Date): boolean {

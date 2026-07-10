@@ -1,12 +1,14 @@
-import { useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { NotificationBell } from '@/components/notification-bell';
 import { Screen } from '@/components/screen';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 import { LeadStats, fetchLeadStats } from '@/lib/leads';
+import { Task, completeTask, dueLabel, fetchTodayTasks, isOverdue, sourceMeta } from '@/lib/tasks';
 
 function greetingForNow(): string {
   const hour = new Date().getHours();
@@ -18,14 +20,19 @@ function greetingForNow(): string {
 const DASH = '—';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { profile, session } = useAuth();
   const [stats, setStats] = useState<LeadStats | null>(null);
+  const [tasks, setTasks] = useState<Task[] | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       fetchLeadStats().then((s) => {
         if (active) setStats(s);
+      });
+      fetchTodayTasks().then((t) => {
+        if (active) setTasks(t);
       });
       return () => {
         active = false;
@@ -42,6 +49,11 @@ export default function HomeScreen() {
     { label: 'Ready to follow up', value: stats ? String(stats.ready) : DASH },
     { label: 'For viewing', value: stats ? String(stats.forViewing) : DASH },
   ];
+
+  const finishTask = async (id: string) => {
+    setTasks((prev) => (prev ? prev.filter((t) => t.id !== id) : prev)); // optimistic
+    await completeTask(id);
+  };
 
   return (
     <Screen headerRight={<NotificationBell />}>
@@ -61,6 +73,47 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>
+
+      {/* Today's tasks */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Today&apos;s tasks</Text>
+        <Pressable onPress={() => router.push('/tasks')} hitSlop={8}>
+          <Text style={styles.sectionLink}>View all →</Text>
+        </Pressable>
+      </View>
+      {tasks === null ? null : tasks.length === 0 ? (
+        <View style={styles.taskEmpty}>
+          <Text style={styles.taskEmptyText}>All clear for today 🎉 Add one anytime.</Text>
+          <Pressable onPress={() => router.push('/task-new')} hitSlop={8}>
+            <Text style={styles.sectionLink}>+ Add task</Text>
+          </Pressable>
+        </View>
+      ) : (
+        tasks.map((t) => {
+          const src = sourceMeta(t, session?.user.id ?? null);
+          return (
+            <Pressable key={t.id} style={styles.taskCard} onPress={() => router.push('/tasks')}>
+              <Pressable style={styles.taskCheck} onPress={() => finishTask(t.id)} hitSlop={8}>
+                <Ionicons name="ellipse-outline" size={22} color={BrandColors.orange} />
+              </Pressable>
+              <View style={styles.taskText}>
+                <Text style={styles.taskTitle} numberOfLines={1}>
+                  {t.title}
+                </Text>
+                <Text style={[styles.taskMeta, isOverdue(t) && styles.taskMetaOverdue]} numberOfLines={1}>
+                  {dueLabel(t)}
+                  {t.lead_name ? ` · ${t.lead_name}` : ''}
+                </Text>
+              </View>
+              <View style={[styles.taskChip, src.kind === 'baymo' && styles.taskChipBaymo]}>
+                <Text style={[styles.taskChipText, src.kind === 'baymo' && styles.taskChipTextBaymo]}>
+                  {src.label}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })
+      )}
     </Screen>
   );
 }
@@ -106,4 +159,44 @@ const styles = StyleSheet.create({
     ...TypeScale.h1,
     color: BrandColors.navy,
   },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  sectionTitle: { ...TypeScale.h3, color: BrandColors.textHeading },
+  sectionLink: { ...TypeScale.bodyBold, color: BrandColors.orange },
+  taskEmpty: {
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.card,
+    padding: 16,
+    gap: 6,
+    alignItems: 'center',
+  },
+  taskEmptyText: { ...TypeScale.body, color: BrandColors.textSecondary },
+  taskCard: {
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.card,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  taskCheck: { padding: 2 },
+  taskText: { flex: 1, gap: 1 },
+  taskTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
+  taskMeta: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
+  taskMetaOverdue: { color: BrandColors.error },
+  taskChip: {
+    backgroundColor: BrandColors.cream200,
+    borderRadius: Radii.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  taskChipBaymo: { backgroundColor: BrandColors.navy },
+  taskChipText: { ...TypeScale.labelSmall, color: BrandColors.textSecondary },
+  taskChipTextBaymo: { color: BrandColors.white },
 });

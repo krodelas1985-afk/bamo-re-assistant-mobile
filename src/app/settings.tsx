@@ -26,6 +26,7 @@ const NOTIF_TOGGLES: { key: keyof NotificationPrefs; label: string; hint: string
   { key: 'lead_hot', label: 'Hot leads', hint: 'High-intent leads, ready to talk' },
   { key: 'lead_warm', label: 'Warm leads', hint: 'Leads warming up' },
   { key: 'appointment_reminders', label: 'Appointment reminders', hint: 'Viewings & calls, 24h and 1h before' },
+  { key: 'tasks', label: 'Tasks', hint: 'When a task is assigned to you' },
   { key: 'ads_updates', label: 'Ads updates', hint: 'Campaign & report alerts' },
   { key: 'quiet_hours', label: 'Quiet hours (9 PM–7 AM)', hint: 'Hold non-urgent pushes overnight — hot leads still come through' },
 ];
