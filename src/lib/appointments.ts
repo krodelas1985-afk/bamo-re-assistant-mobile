@@ -2,12 +2,13 @@ import { supabase } from '@/lib/supabase';
 
 /** Agent-scheduled appointments (viewings + calls), table public.appointments. */
 
-export type AppointmentType = 'viewing' | 'call';
+export type AppointmentType = 'viewing' | 'call' | 'event';
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 
 export type Appointment = {
   id: string;
   lead_id: string | null;
+  title: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   appointment_type: AppointmentType;
@@ -19,6 +20,7 @@ export type Appointment = {
 
 export type AppointmentInput = {
   lead_id: string | null;
+  title: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   appointment_type: AppointmentType;
@@ -28,7 +30,26 @@ export type AppointmentInput = {
 };
 
 const SELECT =
-  'id, lead_id, contact_name, contact_phone, appointment_type, scheduled_at, location, notes, status';
+  'id, lead_id, title, contact_name, contact_phone, appointment_type, scheduled_at, location, notes, status';
+
+/** Human label + emoji for an appointment type. */
+export function typeMeta(t: AppointmentType): { label: string; emoji: string } {
+  switch (t) {
+    case 'viewing':
+      return { label: 'Viewing', emoji: '🏡' };
+    case 'call':
+      return { label: 'Phone call', emoji: '📞' };
+    case 'event':
+    default:
+      return { label: 'Event', emoji: '📌' };
+  }
+}
+
+/** The card's primary line: contact for viewings/calls, title for events. */
+export function appointmentTitle(a: Appointment): string {
+  if (a.appointment_type === 'event') return a.title || 'Event';
+  return a.contact_name || a.title || 'Appointment';
+}
 
 /** Upcoming scheduled appointments (RLS-scoped), soonest first. */
 export async function fetchUpcoming(): Promise<{ data: Appointment[]; error: string | null }> {
@@ -102,8 +123,14 @@ export function googleCalendarUrl(a: Appointment): string {
   const start = new Date(a.scheduled_at);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const isViewing = a.appointment_type === 'viewing';
-  const title = `${isViewing ? 'Property Viewing' : 'Call'} — ${a.contact_name || 'BaMo appointment'}`;
+  const prefix =
+    a.appointment_type === 'viewing'
+      ? 'Property Viewing'
+      : a.appointment_type === 'call'
+        ? 'Call'
+        : 'Event';
+  const subject = appointmentTitle(a);
+  const title = a.appointment_type === 'event' ? subject : `${prefix} — ${subject}`;
   const details = `${a.notes ? a.notes + '\n\n' : ''}Scheduled via BaMo`;
   const params = new URLSearchParams({
     action: 'TEMPLATE',
@@ -111,7 +138,7 @@ export function googleCalendarUrl(a: Appointment): string {
     dates: `${fmt(start)}/${fmt(end)}`,
     details,
   });
-  if (isViewing && a.location) params.set('location', a.location);
+  if (a.location) params.set('location', a.location);
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 

@@ -7,11 +7,13 @@ import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
 import {
   Appointment,
+  appointmentTitle,
   fetchUpcoming,
   googleCalendarUrl,
   groupByDay,
   setAppointmentStatus,
   timeLabel,
+  typeMeta,
 } from '@/lib/appointments';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
@@ -90,19 +92,19 @@ function AppointmentCard({
   appt: Appointment;
   onAct: (id: string, status: 'completed' | 'cancelled') => void;
 }) {
-  const isViewing = appt.appointment_type === 'viewing';
+  const meta = typeMeta(appt.appointment_type);
   return (
     <View style={styles.card}>
       <View style={styles.topRow}>
         <View style={styles.iconCircle}>
-          <Text style={styles.icon}>{isViewing ? '🏡' : '📞'}</Text>
+          <Text style={styles.icon}>{meta.emoji}</Text>
         </View>
         <View style={styles.info}>
-          <Text style={styles.name}>{appt.contact_name || 'Appointment'}</Text>
+          <Text style={styles.name}>{appointmentTitle(appt)}</Text>
           <Text style={styles.meta}>
-            {timeLabel(appt.scheduled_at)} · {isViewing ? 'Viewing' : 'Phone call'}
+            {timeLabel(appt.scheduled_at)} · {meta.label}
           </Text>
-          {isViewing && appt.location ? <Text style={styles.location}>📍 {appt.location}</Text> : null}
+          {appt.location ? <Text style={styles.location}>📍 {appt.location}</Text> : null}
           {appt.notes ? <Text style={styles.notes}>{appt.notes}</Text> : null}
         </View>
       </View>

@@ -5,14 +5,18 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
+import { DateField, TimeField } from '@/components/ui/date-time-picker';
 import { TagPill } from '@/components/ui/tag-pill';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, TypeScale } from '@/constants/brand';
 import { AppointmentType, createAppointment, fetchLeadOptions } from '@/lib/appointments';
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+/** Combine a chosen day and a chosen time into one Date (keeps whichever is set). */
+function withDate(current: Date | null, day: Date): Date {
+  const base = current ?? new Date();
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), base.getHours(), base.getMinutes());
+}
 
 export default function NewAppointmentScreen() {
   const router = useRouter();
@@ -22,13 +26,15 @@ export default function NewAppointmentScreen() {
   const [type, setType] = useState<AppointmentType>('viewing');
   const [leads, setLeads] = useState<{ id: string; name: string }[]>([]);
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const [when, setWhen] = useState<Date | null>(null);
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const isEvent = type === 'event';
 
   useEffect(() => {
     fetchLeadOptions().then(setLeads);
@@ -46,7 +52,7 @@ export default function NewAppointmentScreen() {
   const setQuickDate = (offset: number) => {
     const d = new Date();
     d.setDate(d.getDate() + offset);
-    setDate(ymd(d));
+    setWhen((cur) => withDate(cur, d));
   };
 
   const save = async () => {
@@ -54,23 +60,28 @@ export default function NewAppointmentScreen() {
       Alert.alert('Not ready', 'Your workspace is still being set up. Please try again shortly.');
       return;
     }
-    if (!contactName.trim()) {
+    if (isEvent) {
+      if (!title.trim()) {
+        Alert.alert('Name the event', 'Give this event a title, e.g. “Team meeting”.');
+        return;
+      }
+    } else if (!contactName.trim()) {
       Alert.alert('Who is it with?', 'Pick a lead or enter a contact name.');
       return;
     }
-    const stamp = new Date(`${date}T${time || '00:00'}:00`);
-    if (!date || Number.isNaN(stamp.getTime())) {
-      Alert.alert('Check the date & time', 'Use date YYYY-MM-DD and time HH:MM (24-hour).');
+    if (!when) {
+      Alert.alert('Pick a date & time', 'Choose when this is happening.');
       return;
     }
     setSaving(true);
     const { error } = await createAppointment(clientId, session.user.id, {
-      lead_id: leadId,
-      contact_name: contactName.trim(),
-      contact_phone: contactPhone.trim() || null,
+      lead_id: isEvent ? null : leadId,
+      title: isEvent ? title.trim() : null,
+      contact_name: isEvent ? null : contactName.trim(),
+      contact_phone: isEvent ? null : contactPhone.trim() || null,
       appointment_type: type,
-      scheduled_at: stamp.toISOString(),
-      location: type === 'viewing' ? location.trim() || null : null,
+      scheduled_at: when.toISOString(),
+      location: type === 'call' ? null : location.trim() || null,
       notes: notes.trim() || null,
     });
     setSaving(false);
@@ -87,7 +98,7 @@ export default function NewAppointmentScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Ionicons name="close" size={26} color={BrandColors.textHeading} />
         </Pressable>
-        <Text style={styles.headerTitle}>Schedule appointment</Text>
+        <Text style={styles.headerTitle}>New calendar entry</Text>
         <View style={{ width: 26 }} />
       </View>
 
@@ -96,34 +107,59 @@ export default function NewAppointmentScreen() {
         <View style={styles.pillRow}>
           <TagPill label="🏡 Viewing" active={type === 'viewing'} onPress={() => setType('viewing')} />
           <TagPill label="📞 Call" active={type === 'call'} onPress={() => setType('call')} />
+          <TagPill label="📌 Event" active={type === 'event'} onPress={() => setType('event')} />
         </View>
 
-        {leads.length > 0 && (
+        {isEvent ? (
+          <TextField
+            label="Event title"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="e.g. Team meeting, Open house"
+            autoCapitalize="sentences"
+          />
+        ) : (
           <>
-            <Text style={styles.fieldLabel}>Link a lead (optional)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.pillRow}>
-                {leads.map((l) => (
-                  <TagPill key={l.id} label={l.name} active={leadId === l.id} onPress={() => pickLead(l.id, l.name)} />
-                ))}
-              </View>
-            </ScrollView>
+            {leads.length > 0 && (
+              <>
+                <Text style={styles.fieldLabel}>Link a lead (optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.pillRow}>
+                    {leads.map((l) => (
+                      <TagPill
+                        key={l.id}
+                        label={l.name}
+                        active={leadId === l.id}
+                        onPress={() => pickLead(l.id, l.name)}
+                      />
+                    ))}
+                  </View>
+                </ScrollView>
+              </>
+            )}
+
+            <TextField label="Contact name" value={contactName} onChangeText={setContactName} placeholder="Juan Dela Cruz" autoCapitalize="words" />
+            <TextField label="Contact number (optional)" value={contactPhone} onChangeText={setContactPhone} placeholder="0917 123 4567" keyboardType="phone-pad" />
           </>
         )}
 
-        <TextField label="Contact name" value={contactName} onChangeText={setContactName} placeholder="Juan Dela Cruz" autoCapitalize="words" />
-        <TextField label="Contact number (optional)" value={contactPhone} onChangeText={setContactPhone} placeholder="0917 123 4567" keyboardType="phone-pad" />
-
-        <Text style={styles.fieldLabel}>Date</Text>
+        <Text style={styles.fieldLabel}>Quick date</Text>
         <View style={styles.pillRow}>
           <TagPill label="Today" onPress={() => setQuickDate(0)} />
           <TagPill label="Tomorrow" onPress={() => setQuickDate(1)} />
         </View>
-        <TextField label="Date (YYYY-MM-DD)" value={date} onChangeText={setDate} placeholder="2026-07-05" keyboardType="numbers-and-punctuation" />
-        <TextField label="Time (HH:MM, 24-hour)" value={time} onChangeText={setTime} placeholder="14:30" keyboardType="numbers-and-punctuation" />
 
-        {type === 'viewing' && (
-          <TextField label="Location" value={location} onChangeText={setLocation} placeholder="e.g. Vermira Lipa, Model unit" autoCapitalize="words" />
+        <DateField label="Date" value={when} onChange={setWhen} />
+        <TimeField label="Time" value={when} onChange={setWhen} />
+
+        {type !== 'call' && (
+          <TextField
+            label={isEvent ? 'Location (optional)' : 'Location'}
+            value={location}
+            onChangeText={setLocation}
+            placeholder="e.g. Vermira Lipa, Model unit"
+            autoCapitalize="words"
+          />
         )}
         <TextField label="Notes (optional)" value={notes} onChangeText={setNotes} placeholder="Bringing spouse; confirm gate pass" multiline numberOfLines={3} />
 
@@ -133,7 +169,7 @@ export default function NewAppointmentScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <Button label={saving ? 'Saving…' : 'Schedule'} onPress={save} style={styles.footerBtn} />
+        <Button label={saving ? 'Saving…' : 'Save to calendar'} onPress={save} style={styles.footerBtn} />
       </View>
     </SafeAreaView>
   );
