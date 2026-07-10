@@ -33,7 +33,7 @@ const TOTAL_STEPS = 5;
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { profile, session, refreshOnboarding } = useAuth();
+  const { profile, session, reloadProfile } = useAuth();
   const [record, setRecord] = useState<Onboarding | null>(null);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -136,7 +136,10 @@ export default function OnboardingScreen() {
         setError(e);
         return;
       }
-      await refreshOnboarding();
+      // Submitting auto-provisions the free workspace server-side (trigger sets
+      // profiles.client_id). Reload the profile so client_id is live in memory,
+      // which also recomputes the onboarding gate.
+      await reloadProfile();
       router.replace('/');
     }
   };

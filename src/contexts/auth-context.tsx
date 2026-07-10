@@ -22,6 +22,12 @@ type AuthState = {
   /** true once we know the user must complete onboarding; null while still resolving */
   needsOnboarding: boolean | null;
   refreshOnboarding: () => Promise<void>;
+  /**
+   * Re-fetch the profile row and recompute the onboarding gate. Call after events
+   * that change the profile server-side — e.g. onboarding submit auto-provisions a
+   * workspace, so `client_id` needs to be pulled back into memory.
+   */
+  reloadProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   /**
    * Create a new account. Returns `needsVerification: true` when Supabase requires
@@ -99,6 +105,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, profile));
   };
 
+  const reloadProfile = async () => {
+    if (!session?.user) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, role, client_id, is_active')
+      .eq('id', session.user.id)
+      .maybeSingle();
+    const prof = (data as Profile) ?? null;
+    setProfile(prof);
+    setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, prof));
+  };
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     return { error: error ? error.message : null };
@@ -165,6 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         needsOnboarding,
         refreshOnboarding,
+        reloadProfile,
         signIn,
         signUp,
         verifyEmailOtp,
