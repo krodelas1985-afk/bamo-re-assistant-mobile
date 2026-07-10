@@ -22,6 +22,125 @@ export const DOC_TYPES = [
   'Reservation Agreement',
 ] as const;
 
+export type DocType = (typeof DOC_TYPES)[number];
+
+// ── Per-type intake forms ────────────────────────────────────────────────────
+// Each document type asks for the details that actually matter for it, instead
+// of one shared six-field form. Values feed the BayMo draft as labeled lines;
+// anything left blank becomes a [BRACKETED] placeholder in the draft.
+
+export type DocFieldKind = 'text' | 'amount' | 'percent' | 'multiline' | 'choice';
+
+export type DocField = {
+  key: string;
+  label: string;
+  placeholder?: string;
+  kind?: DocFieldKind; // default 'text'
+  choices?: readonly string[]; // for kind 'choice'
+  autoCapitalize?: 'none' | 'words' | 'sentences';
+};
+
+export type DocTypeSchema = { fields: readonly DocField[]; promptHint: string };
+
+const FINANCING = ['Cash', 'Pag-IBIG', 'Bank loan', 'In-house'] as const;
+
+export const DOC_FIELD_SCHEMAS: Record<DocType, DocTypeSchema> = {
+  'Authority to Sell': {
+    promptHint:
+      "This is a Philippine broker's Authority to Sell. State the authority period and whether it is exclusive or non-exclusive, the agent's commission, and that the owner warrants ownership and authority to sell.",
+    fields: [
+      { key: 'owner', label: 'Owner / Seller', placeholder: 'e.g. Kathy Talabis', autoCapitalize: 'words' },
+      { key: 'property', label: 'Property', placeholder: 'e.g. Lot 5 Blk 3, Vermira Lipa, Batangas', autoCapitalize: 'words' },
+      { key: 'title_no', label: 'Title no. (TCT/CCT)', placeholder: 'e.g. TCT-123456' },
+      { key: 'price', label: 'Selling price', placeholder: '4,500,000', kind: 'amount' },
+      { key: 'commission', label: 'Agent commission', placeholder: '2', kind: 'percent' },
+      { key: 'authority_period', label: 'Authority period', placeholder: 'e.g. 6 months' },
+      { key: 'exclusivity', label: 'Exclusivity', kind: 'choice', choices: ['Exclusive', 'Non-exclusive'] },
+      { key: 'agent', label: 'Agent', placeholder: 'Your name', autoCapitalize: 'words' },
+    ],
+  },
+  'Memorandum of Agreement': {
+    promptHint:
+      'This is a Philippine Memorandum of Agreement. Lay out the parties, the purpose/scope of the agreement, the key terms and obligations, and the effectivity date.',
+    fields: [
+      { key: 'party_a', label: 'First party', placeholder: 'Name / company', autoCapitalize: 'words' },
+      { key: 'party_b', label: 'Second party', placeholder: 'Name / company', autoCapitalize: 'words' },
+      { key: 'purpose', label: 'Purpose / scope', placeholder: 'What this agreement covers', kind: 'multiline', autoCapitalize: 'sentences' },
+      { key: 'key_terms', label: 'Key terms', placeholder: 'Obligations, split, deliverables', kind: 'multiline', autoCapitalize: 'sentences' },
+      { key: 'effectivity', label: 'Effectivity date', placeholder: 'e.g. July 15, 2026' },
+    ],
+  },
+  'Contract to Sell': {
+    promptHint:
+      'This is a Philippine Contract to Sell. Include the total contract price, downpayment, the payment/amortization terms, financing method, and that title transfers upon full payment.',
+    fields: [
+      { key: 'seller', label: 'Seller', placeholder: 'e.g. Kathy Talabis', autoCapitalize: 'words' },
+      { key: 'buyer', label: 'Buyer', placeholder: 'e.g. John Smith', autoCapitalize: 'words' },
+      { key: 'property', label: 'Property', placeholder: 'e.g. Lot 5 Blk 3, Vermira Lipa', autoCapitalize: 'words' },
+      { key: 'title_no', label: 'Title no. (TCT/CCT)', placeholder: 'e.g. TCT-123456' },
+      { key: 'price', label: 'Total contract price', placeholder: '4,500,000', kind: 'amount' },
+      { key: 'downpayment', label: 'Downpayment', placeholder: '500,000', kind: 'amount' },
+      { key: 'payment_terms', label: 'Payment terms', placeholder: 'e.g. ₱50k/mo for 60 months', kind: 'multiline' },
+      { key: 'financing', label: 'Financing', kind: 'choice', choices: FINANCING },
+    ],
+  },
+  'Letter of Intent': {
+    promptHint:
+      'This is a Philippine Letter of Intent to purchase. State the offer price, earnest money, the offer validity period, and that the LOI is non-binding pending a formal contract.',
+    fields: [
+      { key: 'buyer', label: 'Buyer', placeholder: 'e.g. John Smith', autoCapitalize: 'words' },
+      { key: 'seller', label: 'Seller / Developer', placeholder: 'e.g. Vermira Land Inc.', autoCapitalize: 'words' },
+      { key: 'property', label: 'Property', placeholder: 'e.g. Lot 5 Blk 3, Vermira Lipa', autoCapitalize: 'words' },
+      { key: 'offer_price', label: 'Offer price', placeholder: '4,300,000', kind: 'amount' },
+      { key: 'earnest_money', label: 'Earnest money', placeholder: '100,000', kind: 'amount' },
+      { key: 'validity', label: 'Offer validity', placeholder: 'e.g. 15 days' },
+      { key: 'conditions', label: 'Conditions', placeholder: 'e.g. subject to bank approval', kind: 'multiline', autoCapitalize: 'sentences' },
+    ],
+  },
+  'Reservation Agreement': {
+    promptHint:
+      'This is a Philippine Reservation Agreement for a developer unit/lot. State the reservation fee, that it is applied to the downpayment, the downpayment terms, financing method, and the reservation period.',
+    fields: [
+      { key: 'buyer', label: 'Buyer', placeholder: 'e.g. John Smith', autoCapitalize: 'words' },
+      { key: 'developer', label: 'Developer / Seller', placeholder: 'e.g. Vermira Land Inc.', autoCapitalize: 'words' },
+      { key: 'unit', label: 'Unit / Lot', placeholder: 'e.g. Lot 5 Blk 3, Vermira Lipa', autoCapitalize: 'words' },
+      { key: 'list_price', label: 'Total list price', placeholder: '4,500,000', kind: 'amount' },
+      { key: 'reservation_fee', label: 'Reservation fee', placeholder: '25,000', kind: 'amount' },
+      { key: 'dp_terms', label: 'Downpayment terms', placeholder: 'e.g. 10% over 12 months', kind: 'multiline' },
+      { key: 'financing', label: 'Financing', kind: 'choice', choices: FINANCING },
+    ],
+  },
+};
+
+/** Format one field's value for the AI context (₱ prefix / % suffix). */
+function formatFieldValue(field: DocField, raw: string): string {
+  const v = raw.trim();
+  if (!v) return '';
+  if (field.kind === 'amount') return `₱${v}`;
+  if (field.kind === 'percent') return `${v}%`;
+  return v;
+}
+
+/**
+ * Turn the per-type field values (+ free-text "Other details") into the labeled
+ * context block passed to BayMo. Only filled fields are included.
+ */
+export function composeDocContext(
+  type: string,
+  values: Record<string, string>,
+  extra: string,
+): string {
+  const schema = DOC_FIELD_SCHEMAS[type as DocType];
+  const parts: string[] = [];
+  if (schema) {
+    for (const field of schema.fields) {
+      const formatted = formatFieldValue(field, values[field.key] ?? '');
+      if (formatted) parts.push(`${field.label}: ${formatted}`);
+    }
+  }
+  return [parts.join('\n'), extra.trim()].filter(Boolean).join('\n');
+}
+
 export type AgentDocument = {
   id: string;
   type: string;
@@ -91,8 +210,10 @@ export async function generateDocument(
   type: string,
   context: string,
 ): Promise<{ body: string | null; error: string | null }> {
+  const hint = DOC_FIELD_SCHEMAS[type as DocType]?.promptHint ?? '';
   const prompt =
     `Draft a ${type} for a Philippine real estate transaction.` +
+    (hint ? `\n\n${hint}` : '') +
     (context.trim() ? `\n\nDetails provided by the agent:\n${context.trim()}` : '') +
     `\n\nUse [BRACKETED] placeholders for any detail not provided. Do not invent names, prices, or dates.`;
   const { reply, error } = await sendToBayMo([{ role: 'user', content: prompt }], 'document', type);

@@ -19,8 +19,11 @@ import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 import {
+  DOC_FIELD_SCHEMAS,
   DOC_TYPES,
   DocStatus,
+  DocType,
+  composeDocContext,
   createDocument,
   deleteDocument,
   exportDocumentPdf,
@@ -42,23 +45,24 @@ export default function DocumentEditorScreen() {
   const [body, setBody] = useState('');
   const [status, setStatus] = useState<DocStatus>('draft');
 
-  // Quick fields + free-text that feed the AI draft (new documents only).
-  const [seller, setSeller] = useState('');
-  const [buyer, setBuyer] = useState('');
-  const [property, setProperty] = useState('');
-  const [price, setPrice] = useState('');
-  const [commission, setCommission] = useState('');
-  const [agent, setAgent] = useState('');
+  // Per-type field values + free-text that feed the AI draft (new documents only).
+  const [values, setValues] = useState<Record<string, string>>({});
   const [context, setContext] = useState('');
+  const setField = (key: string, val: string) => setValues((v) => ({ ...v, [key]: val }));
 
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Prefill the agent's own name on a new document.
-  useEffect(() => {
-    if (isNew && profile?.full_name) setAgent(profile.full_name);
-  }, [isNew, profile]);
+  const schema = type ? DOC_FIELD_SCHEMAS[type as DocType] : null;
+
+  // Prefill the agent's own name into the 'agent' field once profile loads
+  // (state-adjustment-during-render, not an effect). Only for a new document.
+  const [agentPrefilled, setAgentPrefilled] = useState(false);
+  if (isNew && !agentPrefilled && profile?.full_name) {
+    setAgentPrefilled(true);
+    setValues((v) => (v.agent ? v : { ...v, agent: profile.full_name! }));
+  }
 
   useEffect(() => {
     if (isNew) return;
@@ -76,24 +80,13 @@ export default function DocumentEditorScreen() {
     });
   }, [id, isNew, router]);
 
-  const composeContext = (): string => {
-    const parts: string[] = [];
-    if (seller.trim()) parts.push(`Seller / Owner: ${seller.trim()}`);
-    if (buyer.trim()) parts.push(`Buyer: ${buyer.trim()}`);
-    if (property.trim()) parts.push(`Property: ${property.trim()}`);
-    if (price.trim()) parts.push(`Price: ₱${price.trim()}`);
-    if (commission.trim()) parts.push(`Agent commission: ${commission.trim()}%`);
-    if (agent.trim()) parts.push(`Agent: ${agent.trim()}`);
-    return [parts.join('\n'), context.trim()].filter(Boolean).join('\n');
-  };
-
   const generate = async () => {
     if (!type) {
       Alert.alert('Pick a document type', 'Choose which document BayMo should draft.');
       return;
     }
     setGenerating(true);
-    const { body: draft, error } = await generateDocument(type, composeContext());
+    const { body: draft, error } = await generateDocument(type, composeDocContext(type, values, context));
     setGenerating(false);
     if (error || draft == null) {
       Alert.alert('Could not generate', error ?? 'Please try again.');
@@ -201,23 +194,48 @@ export default function DocumentEditorScreen() {
                   blanks for anything you skip. All fields are optional.
                 </Text>
 
-                <TextField label="Seller / Owner" value={seller} onChangeText={setSeller} placeholder="e.g. Kathy Talabis" autoCapitalize="words" />
-                <TextField label="Buyer" value={buyer} onChangeText={setBuyer} placeholder="e.g. John Smith" autoCapitalize="words" />
-                <TextField label="Property" value={property} onChangeText={setProperty} placeholder="e.g. Lot 5 Blk 3, Vermira Lipa, Batangas" autoCapitalize="words" />
-                <View style={styles.twoCol}>
-                  <View style={styles.flex}>
-                    <TextField label="Price (₱)" value={price} onChangeText={setPrice} placeholder="4,500,000" keyboardType="numbers-and-punctuation" />
-                  </View>
-                  <View style={styles.flex}>
-                    <TextField label="Commission (%)" value={commission} onChangeText={setCommission} placeholder="2" keyboardType="numbers-and-punctuation" />
-                  </View>
-                </View>
-                <TextField label="Agent" value={agent} onChangeText={setAgent} placeholder="Your name" autoCapitalize="words" />
+                {schema ? (
+                  schema.fields.map((f) =>
+                    f.kind === 'choice' ? (
+                      <View key={f.key} style={styles.choiceField}>
+                        <Text style={styles.fieldLabel}>{f.label}</Text>
+                        <View style={styles.pillRow}>
+                          {f.choices!.map((c) => (
+                            <TagPill
+                              key={c}
+                              label={c}
+                              active={values[f.key] === c}
+                              onPress={() => setField(f.key, values[f.key] === c ? '' : c)}
+                            />
+                          ))}
+                        </View>
+                      </View>
+                    ) : (
+                      <TextField
+                        key={f.key}
+                        label={f.label}
+                        value={values[f.key] ?? ''}
+                        onChangeText={(t) => setField(f.key, t)}
+                        placeholder={f.placeholder}
+                        autoCapitalize={f.autoCapitalize}
+                        keyboardType={
+                          f.kind === 'amount' || f.kind === 'percent'
+                            ? 'numbers-and-punctuation'
+                            : 'default'
+                        }
+                        multiline={f.kind === 'multiline'}
+                        numberOfLines={f.kind === 'multiline' ? 3 : undefined}
+                      />
+                    ),
+                  )
+                ) : (
+                  <Text style={styles.aiSub}>Pick a document type above to see its fields.</Text>
+                )}
                 <TextField
                   label="Other details"
                   value={context}
                   onChangeText={setContext}
-                  placeholder="e.g. 6-month authority, exclusive; buyer pays transfer taxes; earnest money ₱100k"
+                  placeholder="Anything else BayMo should include (e.g. buyer pays transfer taxes)"
                   multiline
                   numberOfLines={3}
                 />
@@ -312,8 +330,8 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   section: { ...TypeScale.h4, color: BrandColors.textHeading, marginTop: 4 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  twoCol: { flexDirection: 'row', gap: 12 },
-  flex: { flex: 1 },
+  choiceField: { gap: 6 },
+  fieldLabel: { ...TypeScale.label, color: BrandColors.textSecondary },
   aiCard: {
     backgroundColor: BrandColors.cream100,
     borderRadius: Radii.card,
