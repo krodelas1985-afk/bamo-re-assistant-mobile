@@ -7,7 +7,7 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Screen } from '@/components/screen';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
-import { LeadStats, fetchLeadStats } from '@/lib/leads';
+import { LeadStats, TodayActivity, fetchLeadStats, fetchTodayActivity } from '@/lib/leads';
 import { Task, completeTask, dueLabel, fetchTodayTasks, isOverdue, sourceMeta } from '@/lib/tasks';
 
 function greetingForNow(): string {
@@ -24,6 +24,7 @@ export default function HomeScreen() {
   const { profile, session } = useAuth();
   const [stats, setStats] = useState<LeadStats | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [today, setToday] = useState<TodayActivity | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -33,6 +34,9 @@ export default function HomeScreen() {
       });
       fetchTodayTasks().then((t) => {
         if (active) setTasks(t);
+      });
+      fetchTodayActivity().then((a) => {
+        if (active) setToday(a);
       });
       return () => {
         active = false;
@@ -61,7 +65,9 @@ export default function HomeScreen() {
         <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
         <Text style={styles.greetingName}>{displayName} 👋</Text>
         <Text style={styles.greetingBody}>
-          BaMo is handling the follow-ups. Here&apos;s what needs your attention.
+          {today && (today.newToday > 0 || today.baymoHandled > 0)
+            ? `🌟 ${today.newToday} new lead${today.newToday === 1 ? '' : 's'} today · 💬 BaMo replied to ${today.baymoHandled} lead${today.baymoHandled === 1 ? '' : 's'} today`
+            : "BaMo is handling the follow-ups. Here's what needs your attention."}
         </Text>
       </View>
 
