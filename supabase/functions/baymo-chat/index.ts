@@ -79,13 +79,24 @@ Deno.serve(async (req) => {
       .eq('client_id', profile.client_id);
     if (profile.role === 'agent') leadQ = leadQ.eq('assigned_user_id', uid);
 
+    // Count queries must respect the same scoping as the list — an agent's
+    // numbers should reflect only their own leads, matching the app's RLS view.
+    // (Previously the counts were client-wide, so BayMo told an agent "7 hot
+    // leads" while their Home screen showed 2.)
+    const scopedCount = () => {
+      let q = admin
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', profile.client_id);
+      if (profile.role === 'agent') q = q.eq('assigned_user_id', uid);
+      return q;
+    };
+
     const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
     const [{ data: hot }, { count: hotCount }, { count: newWeek }] = await Promise.all([
       leadQ.eq('lead_temperature', 'Hot').limit(10),
-      admin.from('leads').select('id', { count: 'exact', head: true })
-        .eq('client_id', profile.client_id).eq('lead_temperature', 'Hot'),
-      admin.from('leads').select('id', { count: 'exact', head: true })
-        .eq('client_id', profile.client_id).gte('created_at', weekAgo),
+      scopedCount().eq('lead_temperature', 'Hot'),
+      scopedCount().gte('created_at', weekAgo),
     ]);
     const hotList = (hot ?? [])
       .map((l) => `- ${l.name} (${l.source ?? 'unknown'}): ${l.conversation_summary ?? 'no summary yet'}`)
