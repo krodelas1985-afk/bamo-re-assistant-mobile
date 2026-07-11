@@ -7,8 +7,9 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Screen } from '@/components/screen';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { Announcement, fetchAnnouncements } from '@/lib/announcements';
 import { DailyDigest, fetchLatestDigest, visibleSuggestions } from '@/lib/digest';
-import { LeadStats, TodayActivity, fetchLeadStats, fetchTodayActivity } from '@/lib/leads';
+import { LeadStats, TodayActivity, fetchLeadStats, fetchTodayActivity, relativeTime } from '@/lib/leads';
 import { Task, completeTask, dueLabel, fetchTodayTasks, isOverdue, sourceMeta } from '@/lib/tasks';
 
 function greetingForNow(): string {
@@ -39,6 +40,7 @@ export default function HomeScreen() {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [today, setToday] = useState<TodayActivity | null>(null);
   const [digest, setDigest] = useState<DailyDigest | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,6 +56,9 @@ export default function HomeScreen() {
       });
       fetchLatestDigest().then((d) => {
         if (active) setDigest(d);
+      });
+      fetchAnnouncements(3).then((a) => {
+        if (active) setAnnouncements(a);
       });
       return () => {
         active = false;
@@ -134,6 +139,40 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>
+
+      {/* Announcements — platform-wide (BaMo) + this client's, pinned first */}
+      {announcements.length > 0 && (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Announcements</Text>
+          </View>
+          {announcements.map((a) => (
+            <View key={a.id} style={styles.announceCard}>
+              <View style={styles.announceHeader}>
+                <Text style={styles.announceTitle} numberOfLines={1}>
+                  {a.pinned ? '📌 ' : ''}
+                  {a.title}
+                </Text>
+                <View style={[styles.announceChip, a.scope === 'baymo' && styles.announceChipBaymo]}>
+                  <Text
+                    style={[
+                      styles.announceChipText,
+                      a.scope === 'baymo' && styles.announceChipTextBaymo,
+                    ]}>
+                    {a.scope === 'baymo' ? 'BaMo' : 'Team'}
+                  </Text>
+                </View>
+              </View>
+              {!!a.body && (
+                <Text style={styles.announceBody} numberOfLines={3}>
+                  {a.body}
+                </Text>
+              )}
+              <Text style={styles.announceDate}>{relativeTime(a.created_at)}</Text>
+            </View>
+          ))}
+        </>
+      )}
 
       {/* Today's tasks */}
       <View style={styles.sectionHeader}>
@@ -256,6 +295,27 @@ const styles = StyleSheet.create({
     ...TypeScale.h1,
     color: BrandColors.navy,
   },
+
+  // Announcements
+  announceCard: {
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.card,
+    padding: 14,
+    gap: 4,
+  },
+  announceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  announceTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading, flex: 1 },
+  announceChip: {
+    backgroundColor: BrandColors.cream200,
+    borderRadius: Radii.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  announceChipBaymo: { backgroundColor: BrandColors.orange },
+  announceChipText: { ...TypeScale.labelSmall, color: BrandColors.textSecondary },
+  announceChipTextBaymo: { color: BrandColors.white },
+  announceBody: { ...TypeScale.body, color: BrandColors.textBody },
+  announceDate: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
 
   sectionHeader: {
     flexDirection: 'row',
