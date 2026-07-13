@@ -204,11 +204,25 @@ export async function fetchPostHistory(): Promise<AdPost[]> {
   return (data as AdPost[]) ?? [];
 }
 
-/** One-off composed post (facebook only, like the web v1). */
+/**
+ * One-off composed post (facebook only, like the web v1).
+ *
+ * Media: the publisher (meta-publish / n8n scheduler) posts media_urls as
+ * photos (up to 10) or a single video, and falls back to creative_id's
+ * asset when media_urls is empty — so a lone selected creative is sent as
+ * creative_id (the publisher then knows its true photo/video type), while
+ * phone uploads and multi-photo mixes go in media_urls.
+ */
 export async function createPost(
   clientId: string,
   userId: string,
-  input: { message: string; action: 'draft' | 'schedule'; scheduled_at?: string | null },
+  input: {
+    message: string;
+    action: 'draft' | 'schedule';
+    scheduled_at?: string | null;
+    media_urls?: string[];
+    creative_id?: string | null;
+  },
 ): Promise<{ error: string | null }> {
   if (input.action === 'schedule') {
     if (!input.scheduled_at || new Date(input.scheduled_at).getTime() <= Date.now()) {
@@ -221,11 +235,82 @@ export async function createPost(
     platform: 'facebook',
     post_type: 'feed',
     message: input.message,
+    media_urls: input.media_urls?.length ? input.media_urls : null,
+    creative_id: input.creative_id ?? null,
     status: input.action === 'schedule' ? 'scheduled' : 'draft',
     scheduled_at: input.action === 'schedule' ? input.scheduled_at : null,
     source: 'manual',
   });
   return { error: error ? error.message : null };
+}
+
+export type Creative = {
+  id: string;
+  creative_type: string; // 'image' | 'video' | ...
+  asset_url: string;
+  thumbnail_url: string | null;
+  original_filename: string | null;
+  created_at: string;
+};
+
+/** Ready-to-use creatives from the shared Ads Manager library (RLS-scoped). */
+export async function fetchCreatives(): Promise<Creative[]> {
+  const { data } = await supabase
+    .from('creatives')
+    .select('id, creative_type, asset_url, thumbnail_url, original_filename, created_at')
+    .not('asset_url', 'is', null)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  return (data as Creative[]) ?? [];
+}
+
+export type ReferenceDoc = {
+  id: string;
+  filename: string;
+};
+
+/** Saved reference documents (the client's KB / Asset Library docs). */
+export async function fetchReferenceDocs(): Promise<ReferenceDoc[]> {
+  const { data } = await supabase
+    .from('client_reference_documents')
+    .select('id, filename')
+    .order('created_at', { ascending: false })
+    .limit(30);
+  return (data as ReferenceDoc[]) ?? [];
+}
+
+/**
+ * Upload a phone photo/video for a post to the public client-assets bucket.
+ * First path segment must be the client_id — the bucket RLS keys on it.
+ */
+export async function uploadPostMedia(
+  clientId: string,
+  asset: { uri: string; base64?: string | null; mimeType?: string | null },
+): Promise<{ url: string | null; error: string | null }> {
+  try {
+    const mime = asset.mimeType || 'image/jpeg';
+    let body: Uint8Array | ArrayBuffer;
+    if (asset.base64) {
+      const bin = atob(asset.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      body = bytes;
+    } else {
+      body = await (await fetch(asset.uri)).arrayBuffer();
+    }
+    // Keep a real extension — the publisher detects video by URL extension.
+    const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace('quicktime', 'mov');
+    const path = `${clientId}/post-media/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage
+      .from('client-assets')
+      .upload(path, body, { contentType: mime, upsert: false });
+    if (error) return { url: null, error: error.message };
+    const { data } = supabase.storage.from('client-assets').getPublicUrl(path);
+    return { url: data.publicUrl, error: null };
+  } catch (e) {
+    return { url: null, error: String(e) };
+  }
 }
 
 export type GeneratedPost = {
@@ -235,15 +320,23 @@ export type GeneratedPost = {
   caption: string;
   hashtags: string[];
   cta: string | null;
+  /** Non-blocking notice, e.g. a reference URL that could not be loaded. */
+  warning?: string | null;
 };
 
-/** AI caption via the generate-post-content edge function (saves to ad_content). */
+/**
+ * AI caption via the generate-post-content edge function (saves to ad_content).
+ * Optional grounding, mirroring the web Ads Manager: a listing, a reference
+ * URL (their website), and up to 3 saved reference documents (KB).
+ */
 export async function generatePostContent(input: {
   goal: string;
   tone: string;
   language: string;
   listing_id?: string | null;
   instructions?: string | null;
+  reference_url?: string | null;
+  reference_document_ids?: string[];
 }): Promise<{ data: GeneratedPost | null; error: string | null }> {
   const { data, error } = await supabase.functions.invoke('generate-post-content', { body: input });
   if (error) return { data: null, error: error.message };
