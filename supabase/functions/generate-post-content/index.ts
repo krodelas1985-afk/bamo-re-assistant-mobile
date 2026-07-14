@@ -8,6 +8,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
  * stays traceable: every generation is saved to ad_content, where the web
  * Ads Manager's "Pull from Content" already reads.
  *
+ * Optional grounding, same as the web Ads Manager: a linked agent listing,
+ * a reference URL (typically the agent's website), and up to 3 saved
+ * reference documents (client_reference_documents — the client's KB).
+ *
  * Anthropic claude-opus-4-8 when ANTHROPIC_API_KEY is set, else OpenAI gpt-4o.
  * JWT-verified (verify_jwt=true). Keys never ship in the app.
  */
@@ -84,6 +88,100 @@ function stripFences(s: string): string {
   return s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 }
 
+// ---- Reference grounding (ports the web Ads Manager behavior) --------------
+
+const MAX_REFERENCE_DOCUMENTS = 3;
+const COMBINED_REFERENCE_CHAR_BUDGET = 40000;
+const URL_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+const URL_TIMEOUT_MS = 8000;
+const URL_TEXT_CAP = 8000;
+
+const URL_WARNING_MESSAGES: Record<string, string> = {
+  invalid_url: 'Reference URL is not a valid https URL.',
+  timeout: 'Reference URL took too long to load (8s). Generated without it.',
+  fetch_failed: "Couldn't load the reference URL. Generated without it.",
+  too_small: 'The reference URL had no readable text (often happens with sites that load content via JavaScript). Generated without it.',
+  blocked: 'The reference URL blocked our request. Generated without it.',
+};
+
+/**
+ * Fetch a page and reduce it to plain text. No cheerio in Deno edge — noise
+ * elements are removed with regexes before tags are stripped; same limits as
+ * the web Ads Manager (https-only, 8s, 2MB, 8k chars). Failures never block
+ * generation — the caller turns the reason into a warning.
+ */
+async function fetchUrlText(
+  url: string,
+): Promise<{ ok: true; text: string } | { ok: false; reason: string }> {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return { ok: false, reason: 'invalid_url' };
+  }
+  if (parsedUrl.protocol !== 'https:') return { ok: false, reason: 'invalid_url' };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), URL_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'BaMo-ContentStudio/1.0 (+https://bahaymo.com)' },
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof Error && err.name === 'AbortError') return { ok: false, reason: 'timeout' };
+    return { ok: false, reason: 'fetch_failed' };
+  }
+  clearTimeout(timer);
+
+  if (!response.ok) {
+    if ([401, 403, 429].includes(response.status)) return { ok: false, reason: 'blocked' };
+    return { ok: false, reason: 'fetch_failed' };
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) return { ok: false, reason: 'fetch_failed' };
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      totalBytes += value.byteLength;
+      if (totalBytes > URL_MAX_BYTES) {
+        reader.cancel();
+        break;
+      }
+    }
+  } catch {
+    return { ok: false, reason: 'fetch_failed' };
+  }
+  const buffer = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buffer.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const html = new TextDecoder().decode(buffer);
+
+  const bodyText = html
+    .replace(/<(script|style|noscript|iframe|svg|nav|footer|header)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#\d+;|&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (bodyText.length < 200) return { ok: false, reason: 'too_small' };
+  return { ok: true, text: bodyText.length > URL_TEXT_CAP ? bodyText.slice(0, URL_TEXT_CAP) + '...' : bodyText };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return j({ error: 'POST only' }, 405);
@@ -102,6 +200,8 @@ Deno.serve(async (req) => {
     language?: string;
     listing_id?: string | null;
     instructions?: string | null;
+    reference_url?: string | null;
+    reference_document_ids?: string[];
   };
   try {
     payload = await req.json();
@@ -159,10 +259,73 @@ PROPERTY DETAILS (use the real numbers, do not invent any):
 - Description: ${listing.description ?? 'N/A'}`
     : 'No specific property attached — write at the brand level.';
 
+  // Reference URL (e.g. the agent's website) — never blocks generation.
+  const warnings: string[] = [];
+  let referenceBlock = '';
+  let urlRefChars = 0;
+  if (payload.reference_url && payload.reference_url.trim()) {
+    const result = await fetchUrlText(payload.reference_url.trim());
+    if (result.ok) {
+      referenceBlock = `\nREFERENCE SOURCE (facts only — do not invent details not present here, do not contradict these facts):\n${result.text}`;
+      urlRefChars = result.text.length;
+    } else {
+      warnings.push(URL_WARNING_MESSAGES[result.reason] ?? URL_WARNING_MESSAGES.fetch_failed);
+    }
+  }
+
+  // Reference documents — the client's saved KB docs (client_reference_documents).
+  let documentBlock = '';
+  const docIds = Array.isArray(payload.reference_document_ids)
+    ? payload.reference_document_ids.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : [];
+  if (docIds.length > MAX_REFERENCE_DOCUMENTS) {
+    return j({ error: `At most ${MAX_REFERENCE_DOCUMENTS} reference documents per generation` }, 400);
+  }
+  if (docIds.length > 0) {
+    const { data: docs, error: docErr } = await admin
+      .from('client_reference_documents')
+      .select('id, client_id, filename, extracted_text')
+      .in('id', docIds);
+    if (docErr) return j({ error: docErr.message }, 500);
+    if (!docs || docs.length !== docIds.length) {
+      return j({ error: 'One or more reference documents not found' }, 404);
+    }
+    if (docs.some((d) => d.client_id !== clientId)) return j({ error: 'Forbidden' }, 403);
+
+    // Apply the combined char budget: only the last in-budget doc is truncated;
+    // later docs drop entirely once the budget is spent.
+    const byId = new Map(docs.map((d) => [d.id, d]));
+    let remaining = COMBINED_REFERENCE_CHAR_BUDGET - urlRefChars;
+    const blocks: string[] = [];
+    let truncated = false;
+    for (const id of docIds) {
+      const d = byId.get(id)!;
+      if (remaining <= 0) {
+        truncated = true;
+        continue;
+      }
+      let text = d.extracted_text ?? '';
+      if (text.length > remaining) {
+        text = text.slice(0, remaining);
+        truncated = true;
+      }
+      remaining -= text.length;
+      blocks.push(
+        `REFERENCE DOCUMENT — ${d.filename} (facts only — do not invent details not present here, do not contradict these facts):\n${text}`,
+      );
+    }
+    documentBlock = blocks.length ? `\n${blocks.join('\n\n')}` : '';
+    if (truncated) {
+      warnings.push('Some reference documents were truncated to fit the prompt budget.');
+    }
+  }
+
   const brand = client?.name ?? profile.full_name ?? 'the agent';
   const prompt = `You are the social media copywriter for "${brand}"${client?.company_name ? ` (${client.company_name})` : ''}, a Philippine real estate brand. Write one organic facebook post.
 ${payload.instructions?.trim() ? `\nADDITIONAL INSTRUCTIONS FROM THE CLIENT: ${payload.instructions.trim()}` : ''}
 ${listingBlock}
+${referenceBlock}
+${documentBlock}
 
 GOAL: ${goalEntry.instruction}
 STYLE: Use language that feels ${goalEntry.adjectives}. The factual content comes from the inputs above — these adjectives describe the register, not new facts.
@@ -260,5 +423,6 @@ Respond with ONLY a JSON object, no markdown fences, in exactly this shape:
     caption: parsed.caption,
     hashtags: parsed.hashtags ?? [],
     cta: parsed.cta ?? null,
+    warning: warnings.length ? warnings.join(' ') : null,
   });
 });
