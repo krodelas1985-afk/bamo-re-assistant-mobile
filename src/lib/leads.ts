@@ -477,6 +477,51 @@ export async function fetchLeadStats(): Promise<LeadStats> {
   return { newThisWeek, hot, ready, forViewing };
 }
 
+export type TodayActivity = {
+  /** Leads created since Manila midnight. */
+  newToday: number;
+  /** Distinct leads BaMo (ai/sequence/system senders) replied to since Manila midnight. */
+  baymoHandled: number;
+  /** Does this client have a live campaign? False → show the "activate BaMo" nudge. */
+  automationActive: boolean;
+};
+
+/** Manila midnight as an ISO instant — "today" follows PH time, not the device TZ. */
+function manilaMidnightIso(): string {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }); // YYYY-MM-DD
+  return `${today}T00:00:00+08:00`;
+}
+
+/**
+ * Home "daily update" strip: what happened today. Both queries are RLS-scoped,
+ * so agents see their own leads' numbers and admins the whole client. BaMo
+ * attribution matches the shared senderLabel rule (ai/sequence/system senders
+ * or sent_via='baymo'); distinct lead count is folded client-side.
+ */
+export async function fetchTodayActivity(): Promise<TodayActivity> {
+  const since = manilaMidnightIso();
+  const [newRes, convRes, activeRes] = await Promise.all([
+    supabase.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', since),
+    supabase
+      .from('conversations')
+      .select('lead_id')
+      .gte('created_at', since)
+      .or('sender.in.(ai,sequence,system),sent_via.eq.baymo')
+      .limit(1000),
+    // SECURITY DEFINER RPC — campaigns table itself is not client-readable.
+    supabase.rpc('client_has_active_campaign'),
+  ]);
+  const handled = new Set<string>();
+  for (const row of (convRes.data as { lead_id: string | null }[]) ?? []) {
+    if (row.lead_id) handled.add(row.lead_id);
+  }
+  return {
+    newToday: newRes.count ?? 0,
+    baymoHandled: handled.size,
+    automationActive: activeRes.data === true,
+  };
+}
+
 /** Source choices offered when an agent adds a lead by hand. */
 export const MANUAL_SOURCE_OPTIONS = [
   'Manual',

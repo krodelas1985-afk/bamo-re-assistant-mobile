@@ -7,7 +7,9 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Screen } from '@/components/screen';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
-import { LeadStats, fetchLeadStats } from '@/lib/leads';
+import { Announcement, fetchAnnouncements } from '@/lib/announcements';
+import { DailyDigest, fetchLatestDigest, visibleSuggestions } from '@/lib/digest';
+import { LeadStats, TodayActivity, fetchLeadStats, fetchTodayActivity, relativeTime } from '@/lib/leads';
 import { Task, completeTask, dueLabel, fetchTodayTasks, isOverdue, sourceMeta } from '@/lib/tasks';
 
 function greetingForNow(): string {
@@ -19,11 +21,26 @@ function greetingForNow(): string {
 
 const DASH = '—';
 
+/** "Today" / "Yesterday" / "Jul 9" for the digest's summarized day (Manila). */
+function digestDateLabel(ymd: string): string {
+  const manilaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  if (ymd === manilaToday) return 'Today';
+  const diff = Math.round(
+    (new Date(`${manilaToday}T00:00:00+08:00`).getTime() - new Date(`${ymd}T00:00:00+08:00`).getTime()) / 864e5,
+  );
+  if (diff === 1) return 'Yesterday';
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const { profile, session } = useAuth();
   const [stats, setStats] = useState<LeadStats | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [today, setToday] = useState<TodayActivity | null>(null);
+  const [digest, setDigest] = useState<DailyDigest | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -33,6 +50,15 @@ export default function HomeScreen() {
       });
       fetchTodayTasks().then((t) => {
         if (active) setTasks(t);
+      });
+      fetchTodayActivity().then((a) => {
+        if (active) setToday(a);
+      });
+      fetchLatestDigest().then((d) => {
+        if (active) setDigest(d);
+      });
+      fetchAnnouncements(3).then((a) => {
+        if (active) setAnnouncements(a);
       });
       return () => {
         active = false;
@@ -61,9 +87,49 @@ export default function HomeScreen() {
         <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
         <Text style={styles.greetingName}>{displayName} 👋</Text>
         <Text style={styles.greetingBody}>
-          BaMo is handling the follow-ups. Here&apos;s what needs your attention.
+          {today === null
+            ? "BaMo is handling the follow-ups. Here's what needs your attention."
+            : !today.automationActive
+              ? `🌟 ${today.newToday} new lead${today.newToday === 1 ? '' : 's'} today · 🤖 BaMo automation is off — activate a campaign and let BaMo handle them`
+              : today.newToday > 0 || today.baymoHandled > 0
+                ? `🌟 ${today.newToday} new lead${today.newToday === 1 ? '' : 's'} today · 💬 BaMo replied to ${today.baymoHandled} lead${today.baymoHandled === 1 ? '' : 's'} today`
+                : "BaMo is handling the follow-ups. Here's what needs your attention."}
         </Text>
       </View>
+
+      {/* Morning digest — yesterday's summary, generated 6:15 AM Manila */}
+      {digest && (
+        <View style={styles.digestCard}>
+          <View style={styles.digestHeader}>
+            <Text style={styles.digestTitle}>☀️ Yesterday with BaMo</Text>
+            <Text style={styles.digestDate}>{digestDateLabel(digest.digest_date)}</Text>
+          </View>
+          <Text style={styles.digestLine}>
+            🌟 {digest.metrics.new_leads} new lead{digest.metrics.new_leads === 1 ? '' : 's'} · 💬 BaMo
+            handled {digest.metrics.baymo_handled} · 🔥 {digest.metrics.turned_hot} turned Hot ·
+            ✅ {digest.metrics.turned_warm} turned Warm
+          </Text>
+          {!digest.metrics.automation_active && (
+            <View style={styles.digestNudge}>
+              <Text style={styles.digestNudgeText}>
+                🤖 BaMo automation is not active. Activate a campaign and BaMo will greet, qualify,
+                and follow up your new leads for you.
+              </Text>
+            </View>
+          )}
+          {visibleSuggestions(digest, profile?.role ?? null, session?.user.id ?? null).map((s) => (
+            <Pressable
+              key={s.lead_id}
+              style={styles.digestSuggestion}
+              onPress={() => router.push({ pathname: '/lead/[id]', params: { id: s.lead_id } })}>
+              <Text style={styles.digestSuggestionText} numberOfLines={1}>
+                {s.temperature === 'Hot' ? '🔥' : '✅'} <Text style={styles.digestSuggestionName}>{s.name}</Text> — {s.reason}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={BrandColors.textMuted} />
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <View style={styles.statsGrid}>
         {cards.map((s) => (
@@ -73,6 +139,40 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>
+
+      {/* Announcements — platform-wide (BaMo) + this client's, pinned first */}
+      {announcements.length > 0 && (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Announcements</Text>
+          </View>
+          {announcements.map((a) => (
+            <View key={a.id} style={styles.announceCard}>
+              <View style={styles.announceHeader}>
+                <Text style={styles.announceTitle} numberOfLines={1}>
+                  {a.pinned ? '📌 ' : ''}
+                  {a.title}
+                </Text>
+                <View style={[styles.announceChip, a.scope === 'baymo' && styles.announceChipBaymo]}>
+                  <Text
+                    style={[
+                      styles.announceChipText,
+                      a.scope === 'baymo' && styles.announceChipTextBaymo,
+                    ]}>
+                    {a.scope === 'baymo' ? 'BaMo' : 'Team'}
+                  </Text>
+                </View>
+              </View>
+              {!!a.body && (
+                <Text style={styles.announceBody} numberOfLines={3}>
+                  {a.body}
+                </Text>
+              )}
+              <Text style={styles.announceDate}>{relativeTime(a.created_at)}</Text>
+            </View>
+          ))}
+        </>
+      )}
 
       {/* Today's tasks */}
       <View style={styles.sectionHeader}>
@@ -138,6 +238,42 @@ const styles = StyleSheet.create({
     color: BrandColors.cream200,
     marginTop: 8,
   },
+  // Morning digest card
+  digestCard: {
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.card,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: BrandColors.cream400,
+  },
+  digestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  digestTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
+  digestDate: { ...TypeScale.labelSmall, color: BrandColors.textMuted },
+  digestLine: { ...TypeScale.body, color: BrandColors.textBody },
+  digestNudge: {
+    backgroundColor: BrandColors.cream100,
+    borderRadius: Radii.button,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: BrandColors.orangeSoft,
+  },
+  digestNudgeText: { ...TypeScale.bodySmall, color: BrandColors.orangeDark },
+  digestSuggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: BrandColors.border,
+  },
+  digestSuggestionText: { ...TypeScale.body, color: BrandColors.textBody, flex: 1 },
+  digestSuggestionName: { fontFamily: TypeScale.h4.fontFamily, color: BrandColors.textHeading },
+
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -159,6 +295,27 @@ const styles = StyleSheet.create({
     ...TypeScale.h1,
     color: BrandColors.navy,
   },
+
+  // Announcements
+  announceCard: {
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.card,
+    padding: 14,
+    gap: 4,
+  },
+  announceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  announceTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading, flex: 1 },
+  announceChip: {
+    backgroundColor: BrandColors.cream200,
+    borderRadius: Radii.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  announceChipBaymo: { backgroundColor: BrandColors.orange },
+  announceChipText: { ...TypeScale.labelSmall, color: BrandColors.textSecondary },
+  announceChipTextBaymo: { color: BrandColors.white },
+  announceBody: { ...TypeScale.body, color: BrandColors.textBody },
+  announceDate: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
 
   sectionHeader: {
     flexDirection: 'row',
