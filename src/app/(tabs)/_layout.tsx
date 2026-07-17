@@ -8,7 +8,7 @@ const TAB_ICONS = {
   index: 'home-outline',
   leads: 'people-outline',
   listings: 'grid-outline',
-  calendar: 'calendar-outline',
+  social: 'share-social-outline',
   more: 'apps-outline',
 } as const;
 
@@ -46,7 +46,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="leads" options={{ title: 'Leads' }} />
       <Tabs.Screen name="listings" options={{ title: 'Listings' }} />
-      <Tabs.Screen name="calendar" options={{ title: 'Calendar' }} />
+      <Tabs.Screen name="social" options={{ title: 'Social Media' }} />
       <Tabs.Screen name="more" options={{ title: 'More' }} />
     </Tabs>
   );
