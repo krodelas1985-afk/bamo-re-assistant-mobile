@@ -57,6 +57,8 @@ export const DOC_FIELD_SCHEMAS: Record<DocType, DocTypeSchema> = {
       { key: 'authority_period', label: 'Authority period', placeholder: 'e.g. 6 months' },
       { key: 'exclusivity', label: 'Exclusivity', kind: 'choice', choices: ['Exclusive', 'Non-exclusive'] },
       { key: 'agent', label: 'Agent', placeholder: 'Your name', autoCapitalize: 'words' },
+      { key: 'agent_prc', label: 'Agent PRC License No.', placeholder: 'e.g. 0012345' },
+      { key: 'agent_company', label: 'Agent company / brokerage', placeholder: 'e.g. BaMo Realty', autoCapitalize: 'words' },
     ],
   },
   'Memorandum of Agreement': {
