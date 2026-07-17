@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
+import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
@@ -18,7 +20,6 @@ import {
   changePassword,
   fetchWorkspaceName,
   requestAccountDeletion,
-  updateProfile,
 } from '@/lib/settings';
 
 const NOTIF_TOGGLES: { key: keyof NotificationPrefs; label: string; hint: string }[] = [
@@ -44,9 +45,6 @@ export default function SettingsScreen() {
   const userId = session?.user.id ?? null;
 
   const [workspace, setWorkspace] = useState<string | null>(null);
-  const [fullName, setFullName] = useState(profile?.full_name ?? '');
-  const [phone, setPhone] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -76,23 +74,6 @@ export default function SettingsScreen() {
         Alert.alert('Could not save', error);
       }
     }
-  };
-
-  useEffect(() => {
-    setFullName(profile?.full_name ?? '');
-  }, [profile?.full_name]);
-
-  const saveProfile = async () => {
-    if (!userId) return;
-    if (!fullName.trim()) {
-      Alert.alert('Add your name', 'Please enter your name.');
-      return;
-    }
-    setSavingProfile(true);
-    const { error } = await updateProfile(userId, { full_name: fullName.trim(), phone: phone.trim() || null });
-    setSavingProfile(false);
-    if (error) Alert.alert('Could not save', error);
-    else Alert.alert('Saved', 'Your profile has been updated.');
   };
 
   const savePassword = async () => {
@@ -137,25 +118,28 @@ export default function SettingsScreen() {
   return (
     <Screen title="Settings" onBack={() => router.back()}>
       {/* Profile */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Profile</Text>
-        {workspace ? <Text style={styles.workspace}>{workspace}</Text> : null}
-        {profile?.role ? (
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{ROLE_LABELS[profile.role] ?? profile.role}</Text>
+      <Pressable style={styles.card} onPress={() => router.push('/profile')}>
+        <View style={styles.profileRow}>
+          {profile?.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatar} />
+          ) : (
+            <Avatar name={profile?.full_name ?? '?'} size={48} />
+          )}
+          <View style={styles.profileText}>
+            <Text style={styles.profileName}>{profile?.full_name ?? 'Set up your profile'}</Text>
+            {workspace ? <Text style={styles.workspace}>{workspace}</Text> : null}
+            {profile?.role ? (
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleText}>{ROLE_LABELS[profile.role] ?? profile.role}</Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
-
-        <TextField label="Name" value={fullName} onChangeText={setFullName} placeholder="Juan Dela Cruz" autoCapitalize="words" />
-        <TextField label="Phone" value={phone} onChangeText={setPhone} placeholder="0917 123 4567" keyboardType="phone-pad" />
-        <TextField label="Email" value={profile?.email ?? session?.user.email ?? ''} onChangeText={() => {}} editable={false} />
-
-        {savingProfile ? (
-          <ActivityIndicator color={BrandColors.navy} />
-        ) : (
-          <Button label="Save changes" onPress={saveProfile} />
-        )}
-      </View>
+          <View style={styles.editLink}>
+            <Text style={styles.editLinkText}>Edit profile</Text>
+            <Ionicons name="chevron-forward" size={16} color={BrandColors.navy} />
+          </View>
+        </View>
+      </Pressable>
 
       {/* Password */}
       <View style={styles.card}>
@@ -248,6 +232,34 @@ const styles = StyleSheet.create({
   workspace: {
     ...TypeScale.bodySmall,
     color: BrandColors.textBody,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  profileAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: BrandColors.cream100,
+  },
+  profileText: {
+    flex: 1,
+    gap: 2,
+  },
+  profileName: {
+    ...TypeScale.bodyBold,
+    color: BrandColors.textHeading,
+  },
+  editLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  editLinkText: {
+    ...TypeScale.label,
+    color: BrandColors.navy,
   },
   roleBadge: {
     alignSelf: 'flex-start',
