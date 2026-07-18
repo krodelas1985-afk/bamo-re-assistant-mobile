@@ -56,12 +56,18 @@ export default function DocumentEditorScreen() {
 
   const schema = type ? DOC_FIELD_SCHEMAS[type as DocType] : null;
 
-  // Prefill the agent's own name into the 'agent' field once profile loads
-  // (state-adjustment-during-render, not an effect). Only for a new document.
+  // Prefill the agent's identity (name, PRC no., company) once profile loads
+  // (state-adjustment-during-render, not an effect). Only for a new document;
+  // never overwrites something already typed.
   const [agentPrefilled, setAgentPrefilled] = useState(false);
   if (isNew && !agentPrefilled && profile?.full_name) {
     setAgentPrefilled(true);
-    setValues((v) => (v.agent ? v : { ...v, agent: profile.full_name! }));
+    setValues((v) => ({
+      ...v,
+      ...(!v.agent && profile.full_name ? { agent: profile.full_name } : null),
+      ...(!v.agent_prc && profile.prc_number ? { agent_prc: profile.prc_number } : null),
+      ...(!v.agent_company && profile.company ? { agent_company: profile.company } : null),
+    }));
   }
 
   useEffect(() => {

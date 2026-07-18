@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -91,6 +92,23 @@ export default function PostComposeScreen() {
   const { profile, session } = useAuth();
   const clientId = profile?.client_id ?? null;
   const userId = session?.user.id ?? null;
+
+  // Agent signature (Agent Profile Phase 4) — optional block appended to the
+  // caption on save, built from whatever profile fields are filled in.
+  const signature = [
+    [profile?.full_name, profile?.company].filter(Boolean).join(' · '),
+    profile?.prc_number ? `PRC License No. ${profile.prc_number}` : '',
+    [
+      profile?.phone ? `📞 ${profile.phone}` : '',
+      profile?.whatsapp ? `WhatsApp ${profile.whatsapp}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    profile?.service_area ? `📍 ${profile.service_area}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const [addSignature, setAddSignature] = useState(false);
 
   const [goal, setGoal] = useState('listing_promotion');
   const [tone, setTone] = useState('friendly');
@@ -247,7 +265,7 @@ export default function PostComposeScreen() {
     const loneCreative = media.length === 1 && media[0].creativeId ? media[0].creativeId : null;
     setSaving(true);
     const { error } = await createPost(clientId, userId, {
-      message: message.trim(),
+      message: addSignature && signature ? `${message.trim()}\n\n${signature}` : message.trim(),
       action,
       scheduled_at: scheduledAt,
       media_urls: loneCreative ? [] : media.map((m) => m.url),
@@ -381,6 +399,25 @@ export default function PostComposeScreen() {
           multiline
           numberOfLines={8}
         />
+
+        {/* Agent signature */}
+        {signature ? (
+          <View style={styles.signatureCard}>
+            <View style={styles.signatureRow}>
+              <View style={styles.signatureText}>
+                <Text style={styles.signatureTitle}>Add my signature</Text>
+                <Text style={styles.signatureHint}>Appends your contact details to the post</Text>
+              </View>
+              <Switch
+                value={addSignature}
+                onValueChange={setAddSignature}
+                trackColor={{ true: BrandColors.orange, false: BrandColors.borderDark }}
+                thumbColor={BrandColors.white}
+              />
+            </View>
+            {addSignature ? <Text style={styles.signaturePreview}>{signature}</Text> : null}
+          </View>
+        ) : null}
 
         {/* Media */}
         <Text style={styles.mediaTitle}>Photos & video</Text>
@@ -528,6 +565,25 @@ const styles = StyleSheet.create({
   label: { ...TypeScale.label, color: BrandColors.textSecondary, marginTop: 4 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   rowButtons: { flexDirection: 'row', gap: 10 },
+  signatureCard: {
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.card,
+    borderWidth: 1,
+    borderColor: BrandColors.border,
+    padding: 12,
+    gap: 8,
+  },
+  signatureRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  signatureText: { flex: 1, gap: 1 },
+  signatureTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
+  signatureHint: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
+  signaturePreview: {
+    ...TypeScale.bodySmall,
+    color: BrandColors.textBody,
+    backgroundColor: BrandColors.cream50,
+    borderRadius: Radii.button,
+    padding: 10,
+  },
   mediaTitle: { ...TypeScale.h4, color: BrandColors.textHeading, marginTop: 4 },
   mediaHint: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
   mediaRow: { gap: 8, paddingVertical: 4 },

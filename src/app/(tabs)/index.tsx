@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { NotificationBell } from '@/components/notification-bell';
 import { Screen } from '@/components/screen';
+import { Avatar } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 import { Announcement, fetchAnnouncements } from '@/lib/announcements';
@@ -84,8 +86,21 @@ export default function HomeScreen() {
   return (
     <Screen headerRight={<NotificationBell />}>
       <View style={styles.greetingCard}>
-        <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
-        <Text style={styles.greetingName}>{displayName} 👋</Text>
+        <View style={styles.greetingRow}>
+          <View style={styles.greetingText}>
+            <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
+            <Text style={styles.greetingName}>{displayName} 👋</Text>
+          </View>
+          <Pressable onPress={() => router.push('/profile')} hitSlop={8}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.greetingAvatar} />
+            ) : (
+              <View style={styles.greetingAvatarRing}>
+                <Avatar name={profile?.full_name ?? displayName} size={44} />
+              </View>
+            )}
+          </Pressable>
+        </View>
         <Text style={styles.greetingBody}>
           {today === null
             ? "BaMo is handling the follow-ups. Here's what needs your attention."
@@ -224,6 +239,29 @@ const styles = StyleSheet.create({
     borderRadius: Radii.cardLarge,
     padding: 20,
     gap: 4,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  greetingText: {
+    flex: 1,
+    gap: 4,
+  },
+  greetingAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: BrandColors.cream300,
+    backgroundColor: BrandColors.cream100,
+  },
+  greetingAvatarRing: {
+    borderWidth: 2,
+    borderColor: BrandColors.cream300,
+    borderRadius: 26,
+    padding: 2,
   },
   greetingSmall: {
     ...TypeScale.body,

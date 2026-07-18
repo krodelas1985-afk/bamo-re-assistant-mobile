@@ -50,10 +50,31 @@ export default function WebsiteRequestScreen() {
 
   const [saving, setSaving] = useState(false);
 
-  // Prefill agent details from the signed-in profile.
+  /** "0917 123 4567" → https://wa.me/639171234567 (PH numbers). */
+  const waLinkFromNumber = (num: string): string => {
+    const digits = num.replace(/\D/g, '');
+    const intl = digits.startsWith('0') ? `63${digits.slice(1)}` : digits;
+    return `https://wa.me/${intl}`;
+  };
+
+  // Prefill agent details from the signed-in profile (Agent Profile Phase 4);
+  // everything stays editable per-website.
   useEffect(() => {
     if (profile?.full_name) setName(profile.full_name);
     if (profile?.email) setEmail(profile.email);
+    if (profile?.phone) setPhone(profile.phone);
+    if (profile?.prc_number) setPrc(profile.prc_number);
+    if (profile?.company) setCompany(profile.company);
+    if (profile?.service_area) {
+      setArea(profile.service_area);
+    } else if (profile?.location_city && profile?.location_province) {
+      setArea(`${profile.location_city}, ${profile.location_province}`);
+    }
+    if (profile?.whatsapp) setWhatsapp(waLinkFromNumber(profile.whatsapp));
+    if (profile?.avatar_url) {
+      const url = profile.avatar_url;
+      setHero((h) => h ?? { uri: url, url });
+    }
   }, [profile]);
 
   useEffect(() => {

@@ -88,6 +88,7 @@ export default function RootLayout() {
         <Stack.Screen name="ads" />
         <Stack.Screen name="campaign-request" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="profile" />
       </Stack>
     </AuthProvider>
   );

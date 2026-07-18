@@ -9,10 +9,22 @@ export type Profile = {
   id: string;
   full_name: string | null;
   email: string | null;
+  phone: string | null;
   role: string | null;
   client_id: string | null;
   is_active: boolean | null;
+  avatar_url: string | null;
+  prc_number: string | null;
+  company: string | null;
+  company_logo_url: string | null;
+  whatsapp: string | null;
+  location_province: string | null;
+  location_city: string | null;
+  service_area: string | null;
 };
+
+const PROFILE_COLUMNS =
+  'id, full_name, email, phone, role, client_id, is_active, avatar_url, prc_number, company, company_logo_url, whatsapp, location_province, location_city, service_area';
 
 type AuthState = {
   session: Session | null;
@@ -22,6 +34,8 @@ type AuthState = {
   /** true once we know the user must complete onboarding; null while still resolving */
   needsOnboarding: boolean | null;
   refreshOnboarding: () => Promise<void>;
+  /** Refetch the profile row (e.g. after the user edits it on the Profile screen). */
+  refreshProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
@@ -53,17 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
-    supabase
-      .from('profiles')
-      .select('id, full_name, email, role, client_id, is_active')
-      .eq('id', session.user.id)
-      .maybeSingle()
-      .then(async ({ data }) => {
-        if (cancelled) return;
-        const prof = (data as Profile) ?? null;
-        setProfile(prof);
-        setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, prof));
-      });
+    fetchProfile(session.user.id).then(async (prof) => {
+      if (cancelled) return;
+      setProfile(prof);
+      setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, prof));
+    });
     return () => {
       cancelled = true;
     };
@@ -79,6 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, profile));
   };
 
+  const refreshProfile = async () => {
+    if (!session?.user) return;
+    setProfile(await fetchProfile(session.user.id));
+  };
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     return { error: error ? error.message : null };
@@ -91,10 +104,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, profile, loading, needsOnboarding, refreshOnboarding, signIn, signOut }}>
+      value={{ session, profile, loading, needsOnboarding, refreshOnboarding, refreshProfile, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+async function fetchProfile(userId: string): Promise<Profile | null> {
+  const { data } = await supabase
+    .from('profiles')
+    .select(PROFILE_COLUMNS)
+    .eq('id', userId)
+    .maybeSingle();
+  return (data as Profile) ?? null;
 }
 
 /**
