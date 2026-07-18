@@ -4,6 +4,7 @@ import { createContext, ReactNode, useContext, useEffect, useState } from 'react
 import { hasSubmittedOnboarding } from '@/lib/onboarding';
 import { registerForPushNotifications, removeMyPushToken } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
+import { needsWelcomeTour } from '@/lib/welcome-tour';
 
 export type Profile = {
   id: string;
@@ -34,6 +35,9 @@ type AuthState = {
   /** true once we know the user must complete onboarding; null while still resolving */
   needsOnboarding: boolean | null;
   refreshOnboarding: () => Promise<void>;
+  /** true once we know the user must see the "Meet BayMo" welcome tour; null while resolving */
+  needsTour: boolean | null;
+  refreshWelcomeTour: () => Promise<void>;
   /** Refetch the profile row (e.g. after the user edits it on the Profile screen). */
   refreshProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -47,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
+  const [needsTour, setNeedsTour] = useState<boolean | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -64,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session?.user) {
       setProfile(null);
       setNeedsOnboarding(null);
+      setNeedsTour(null);
       return;
     }
     let cancelled = false;
@@ -71,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setProfile(prof);
       setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, prof));
+      if (cancelled) return;
+      setNeedsTour(await resolveNeedsTour(session.user.id, prof));
     });
     return () => {
       cancelled = true;
@@ -85,6 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshOnboarding = async () => {
     if (!session?.user) return;
     setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, profile));
+  };
+
+  const refreshWelcomeTour = async () => {
+    if (!session?.user) return;
+    setNeedsTour(await resolveNeedsTour(session.user.id, profile));
   };
 
   const refreshProfile = async () => {
@@ -104,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, profile, loading, needsOnboarding, refreshOnboarding, refreshProfile, signIn, signOut }}>
+      value={{ session, profile, loading, needsOnboarding, refreshOnboarding, needsTour, refreshWelcomeTour, refreshProfile, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -128,6 +141,16 @@ async function resolveNeedsOnboarding(userId: string, profile: Profile | null): 
   if (profile.role === 'baymo_admin') return false;
   if (profile.client_id) return false;
   return !(await hasSubmittedOnboarding(userId));
+}
+
+/**
+ * Welcome-tour gate: runs for EVERY first-time user, provisioned or not —
+ * except BaMo staff. A missing profile row means admin/testing; don't trap.
+ */
+async function resolveNeedsTour(userId: string, profile: Profile | null): Promise<boolean> {
+  if (!profile) return false;
+  if (profile.role === 'baymo_admin') return false;
+  return needsWelcomeTour(userId, profile.role);
 }
 
 export function useAuth(): AuthState {
