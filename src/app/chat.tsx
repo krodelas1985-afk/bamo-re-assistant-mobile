@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -45,10 +45,12 @@ const GREETING: UiMessage = {
 
 export default function ChatScreen() {
   const router = useRouter();
+  const { seed } = useLocalSearchParams<{ seed?: string }>();
   const scrollRef = useRef<ScrollView>(null);
   const [messages, setMessages] = useState<UiMessage[]>([GREETING]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const seededRef = useRef(false);
 
   const scrollToEnd = () => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
 
@@ -84,6 +86,18 @@ export default function ChatScreen() {
     },
     [messages, sending],
   );
+
+  // Welcome-tour handoff: /chat?seed=… auto-sends the user's "how can I help"
+  // answer as their first message so BayMo opens with context. Once only.
+  useEffect(() => {
+    if (seededRef.current) return;
+    if (typeof seed === 'string' && seed.trim()) {
+      seededRef.current = true;
+      // Next tick: sending inside the effect body would setState mid-render.
+      const t = setTimeout(() => send(seed.trim()), 0);
+      return () => clearTimeout(t);
+    }
+  }, [seed, send]);
 
   /**
    * Confirm on an action card → model-free execute call, then show the result.

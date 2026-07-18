@@ -186,6 +186,11 @@ export default function SettingsScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Need help?</Text>
         <Button label="Chat with BayMo" variant="secondary" onPress={() => router.push('/chat')} />
+        <Button
+          label="Replay BayMo intro"
+          variant="secondary"
+          onPress={() => router.push('/welcome?replay=1')}
+        />
       </View>
 
       {/* Danger zone */}

@@ -146,6 +146,14 @@ export default function NewListingScreen() {
       Alert.alert('Could not save', error);
       return;
     }
+    if (status === 'published') {
+      // Verification model: listings go live on the Marketplace only after the
+      // BaMo admin checks them — set that expectation at submit time.
+      Alert.alert(
+        'Listing submitted 🎉',
+        'Salamat! The BaMo admin will verify your listing before it goes live on the Marketplace.',
+      );
+    }
     router.back();
   };
 
