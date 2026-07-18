@@ -103,6 +103,11 @@ export default function WelcomeTourScreen() {
   const finish = async (skippedAll: boolean) => {
     if (finishing) return;
     setFinishing(true);
+    // A bare "Just exploring" isn't a request — nothing useful to hand to chat.
+    const chatSeed =
+      [helpChip === 'Just exploring' ? null : helpChip, helpText.trim()]
+        .filter(Boolean)
+        .join(' — ') || null;
     // Replay mode is read-only: the row (and its notification) already exists.
     if (profileId && !isReplay) {
       const helpRequest = [helpChip, helpText.trim()].filter(Boolean).join(' — ') || null;
@@ -122,6 +127,11 @@ export default function WelcomeTourScreen() {
     }
     setFinishing(false);
     router.replace('/');
+    // Their step-6 answer becomes their first BayMo chat message (decided
+    // 2026-07-18) — skipped-all tours and replays go straight to the dashboard.
+    if (!skippedAll && !isReplay && chatSeed) {
+      router.push({ pathname: '/chat', params: { seed: chatSeed } });
+    }
   };
 
   const toggleService = (s: string) =>
@@ -189,11 +199,30 @@ export default function WelcomeTourScreen() {
               sub="Your profile powers your documents, posts, and website — one-time setup lang."
             />
             <View style={styles.actionCard}>
-              <Text style={styles.actionCardText}>
-                Add your photo, PRC license, company, and the areas you serve.
-              </Text>
-              <Button label="Edit my profile" onPress={() => router.push('/profile')} />
-              <Text style={styles.helperText}>Balik ka lang dito pagkatapos — I&apos;ll wait. 🐱</Text>
+              {profileFilled(profile) ? (
+                <View style={styles.profileDoneRow}>
+                  {profile?.avatar_url ? (
+                    <Image source={{ uri: profile.avatar_url }} style={styles.profileDoneAvatar} />
+                  ) : (
+                    <Ionicons name="checkmark-circle" size={28} color={BrandColors.success} />
+                  )}
+                  <Text style={styles.profileDoneText}>
+                    Ayos, {profile?.full_name?.split(/\s+/)[0] ?? 'agent'}! Your profile is looking
+                    good. ✓
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.actionCardText}>
+                  Add your photo, PRC license, company, and the areas you serve.
+                </Text>
+              )}
+              <Button
+                label={profileFilled(profile) ? 'Review my profile' : 'Edit my profile'}
+                onPress={() => router.push('/profile')}
+              />
+              {!profileFilled(profile) && (
+                <Text style={styles.helperText}>Balik ka lang dito pagkatapos — I&apos;ll wait. 🐱</Text>
+              )}
             </View>
           </>
         )}
@@ -326,6 +355,18 @@ export default function WelcomeTourScreen() {
   );
 }
 
+/** "Set up enough": beyond the basics the CRM seeds (name/email), any of the fields the tour asks for. */
+function profileFilled(profile: { avatar_url?: string | null; prc_number?: string | null; company?: string | null; service_area?: string | null; location_city?: string | null } | null): boolean {
+  if (!profile) return false;
+  return Boolean(
+    profile.avatar_url ||
+      profile.prc_number ||
+      profile.company ||
+      profile.service_area ||
+      profile.location_city,
+  );
+}
+
 function StepHeading({ title, sub }: { title: string; sub: string }) {
   return (
     <View style={styles.stepHeading}>
@@ -454,6 +495,22 @@ const styles = StyleSheet.create({
   actionCardText: {
     ...TypeScale.body,
     color: BrandColors.textBody,
+  },
+  profileDoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  profileDoneAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: BrandColors.cream100,
+  },
+  profileDoneText: {
+    ...TypeScale.bodyBold,
+    color: BrandColors.textHeading,
+    flex: 1,
   },
   helperText: {
     ...TypeScale.helper,
