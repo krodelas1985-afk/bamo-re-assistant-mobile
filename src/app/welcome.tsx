@@ -3,6 +3,15 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -158,14 +167,14 @@ export default function WelcomeTourScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 1 && (
           <View style={styles.heroWrap}>
-            <Image source={baymoAvatar} style={styles.baymoHero} contentFit="contain" />
+            <FloatingBaymo />
             <Text style={styles.heroTitle}>
               {firstName ? `Kumusta, ${firstName}! 👋` : 'Kumusta! 👋'}
             </Text>
             <Text style={styles.heroName}>I&apos;m BayMo</Text>
             <Text style={styles.heroSub}>
-              Your AI Virtual Assistant. I handle the lead follow-up work na nakakapagod — para
-              you can focus on closing deals.
+              Your AI Virtual Assistant. Ako na ang bahala sa inquiries at follow-ups — ikaw, focus
+              ka lang sa closing deals. 🏡
             </Text>
           </View>
         )}
@@ -298,14 +307,14 @@ export default function WelcomeTourScreen() {
 
         {step === 7 && (
           <View style={styles.heroWrap}>
-            <Image source={baymoAvatar} style={styles.baymoHero} contentFit="contain" />
+            <FloatingBaymo />
             <Text style={styles.heroTitle}>Tara na! 🎉</Text>
             <Text style={styles.heroSub}>
               {services.length > 0
-                ? `Got it — I noted what you need (${services.length} ${
+                ? `Sulit 'to, promise! I noted what you need (${services.length} ${
                     services.length === 1 ? 'service' : 'services'
-                  }). The BaMo team will reach out to set you up.`
-                : 'All set! You can replay this intro anytime from Settings.'}
+                  }) — the BaMo team will reach out to set you up.`
+                : 'All set! Balik ka lang sa Settings kung gusto mong ulitin itong intro.'}
             </Text>
           </View>
         )}
@@ -373,6 +382,33 @@ function StepHeading({ title, sub }: { title: string; sub: string }) {
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{sub}</Text>
     </View>
+  );
+}
+
+/** Hero BayMo: springs in on mount, then floats gently. */
+function FloatingBaymo() {
+  const scale = useSharedValue(0.85);
+  const floatY = useSharedValue(0);
+
+  useEffect(() => {
+    scale.value = withSpring(1, { damping: 12, stiffness: 120 });
+    floatY.value = withRepeat(
+      withSequence(
+        withTiming(-7, { duration: 1500, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+    );
+  }, [scale, floatY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { translateY: floatY.value }],
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Image source={baymoAvatar} style={styles.baymoHero} contentFit="contain" />
+    </Animated.View>
   );
 }
 
