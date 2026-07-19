@@ -92,6 +92,7 @@ export default function RootLayout() {
         <Stack.Screen name="automations" />
         <Stack.Screen name="automation-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="followup-setup" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="automation-test" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="profile" />
       </Stack>

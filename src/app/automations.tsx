@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
   fetchLatestFollowupRequest,
   fetchMyAutomations,
 } from '@/lib/automations';
+import { fetchMyFbPageId } from '@/lib/leads';
 
 const STATUS_META: Record<
   Automation['status'],
@@ -28,15 +29,19 @@ export default function AutomationsScreen() {
   const router = useRouter();
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [followup, setFollowup] = useState<FollowupRequest | null>(null);
+  const [fbPageId, setFbPageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([fetchMyAutomations(), fetchLatestFollowupRequest()]).then(([a, f]) => {
-        setAutomations(a);
-        setFollowup(f);
-        setLoading(false);
-      });
+      Promise.all([fetchMyAutomations(), fetchLatestFollowupRequest(), fetchMyFbPageId()]).then(
+        ([a, f, p]) => {
+          setAutomations(a);
+          setFollowup(f);
+          setFbPageId(p);
+          setLoading(false);
+        },
+      );
     }, []),
   );
 
@@ -86,6 +91,47 @@ export default function AutomationsScreen() {
             </View>
           );
         })
+      )}
+
+      {automations
+        .filter((a) => a.status === 'pending_review' || a.status === 'active')
+        .slice(0, 1)
+        .map((a) => (
+          <Pressable
+            key={`test-${a.id}`}
+            style={styles.testCard}
+            onPress={() =>
+              router.push({
+                pathname: '/automation-test',
+                params: { campaignId: a.id, name: a.name },
+              })
+            }>
+            <Ionicons name="chatbubbles-outline" size={22} color={BrandColors.white} />
+            <View style={styles.cardText}>
+              <Text style={styles.testTitle}>Test your BaMo</Text>
+              <Text style={styles.testBody}>
+                Chat with BayMo as if you were a lead — see exactly how it will answer.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={BrandColors.white} />
+          </Pressable>
+        ))}
+
+      {fbPageId != null && automations.some((a) => a.status === 'active') && (
+        <Pressable
+          style={styles.card}
+          onPress={() => Linking.openURL(`https://m.me/${fbPageId}`)}>
+          <View style={[styles.iconWrap, { backgroundColor: `${BrandColors.success}18` }]}>
+            <Ionicons name="logo-facebook" size={22} color={BrandColors.success} />
+          </View>
+          <View style={styles.cardText}>
+            <Text style={styles.cardTitle}>See BayMo live</Text>
+            <Text style={styles.cardBody}>
+              Message your own Page on Messenger — BayMo will answer you like a real lead.
+            </Text>
+          </View>
+          <Ionicons name="open-outline" size={18} color={BrandColors.textMuted} />
+        </Pressable>
       )}
 
       {!loading && (
@@ -168,6 +214,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   statusPillText: { ...TypeScale.labelSmall },
+  testCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: BrandColors.navy,
+    borderRadius: Radii.card,
+    padding: 14,
+  },
+  testTitle: { ...TypeScale.bodyBold, color: BrandColors.white },
+  testBody: { ...TypeScale.bodySmall, color: BrandColors.cream100 },
   footnote: {
     ...TypeScale.bodySmall,
     color: BrandColors.textMuted,
