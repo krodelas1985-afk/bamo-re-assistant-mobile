@@ -198,3 +198,70 @@ export async function submitAutomation(
   }
   return { error: null };
 }
+
+/* ---------------- Auto Follow-Up (Phase 4) ---------------- */
+
+export type FollowupStyle = 'gentle' | 'standard' | 'persistent';
+export type FollowupStatus = 'pending' | 'active' | 'rejected' | 'disabled';
+
+export type FollowupRequest = {
+  id: string;
+  style: FollowupStyle;
+  durationDays: number;
+  status: FollowupStatus;
+  adminNotes: string | null;
+  createdAt: string;
+};
+
+export const FOLLOWUP_STYLES = [
+  {
+    key: 'gentle' as const,
+    label: 'Gentle',
+    description: 'A couple of soft check-ins. Low pressure, warm tone.',
+  },
+  {
+    key: 'standard' as const,
+    label: 'Standard (recommended)',
+    description: 'Three well-timed touches: a nudge, a value message, a last call.',
+  },
+  {
+    key: 'persistent' as const,
+    label: 'Persistent',
+    description: 'Up to five touches for high-intent leads. BayMo still respects quiet hours.',
+  },
+];
+
+export const FOLLOWUP_DURATIONS = [7, 14, 30] as const;
+
+export async function fetchLatestFollowupRequest(): Promise<FollowupRequest | null> {
+  const { data, error } = await supabase
+    .from('followup_requests')
+    .select('id, style, duration_days, status, admin_notes, created_at')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: data.id,
+    style: data.style as FollowupStyle,
+    durationDays: data.duration_days,
+    status: data.status as FollowupStatus,
+    adminNotes: data.admin_notes,
+    createdAt: data.created_at,
+  };
+}
+
+export async function submitFollowupRequest(
+  clientId: string,
+  userId: string,
+  input: { style: FollowupStyle; durationDays: number; notes?: string },
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('followup_requests').insert({
+    client_id: clientId,
+    requested_by: userId,
+    style: input.style,
+    duration_days: input.durationDays,
+    notes: input.notes?.trim() || null,
+  });
+  return { error: error ? error.message : null };
+}

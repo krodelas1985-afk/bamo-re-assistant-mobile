@@ -6,7 +6,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
-import { Automation, fetchMyAutomations } from '@/lib/automations';
+import {
+  Automation,
+  FollowupRequest,
+  fetchLatestFollowupRequest,
+  fetchMyAutomations,
+} from '@/lib/automations';
 
 const STATUS_META: Record<
   Automation['status'],
@@ -22,12 +27,14 @@ const STATUS_META: Record<
 export default function AutomationsScreen() {
   const router = useRouter();
   const [automations, setAutomations] = useState<Automation[]>([]);
+  const [followup, setFollowup] = useState<FollowupRequest | null>(null);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      fetchMyAutomations().then((a) => {
+      Promise.all([fetchMyAutomations(), fetchLatestFollowupRequest()]).then(([a, f]) => {
         setAutomations(a);
+        setFollowup(f);
         setLoading(false);
       });
     }, []),
@@ -79,6 +86,38 @@ export default function AutomationsScreen() {
             </View>
           );
         })
+      )}
+
+      {!loading && (
+        <Pressable style={styles.card} onPress={() => router.push('/followup-setup')}>
+          <View
+            style={[
+              styles.iconWrap,
+              {
+                backgroundColor:
+                  followup?.status === 'active'
+                    ? `${BrandColors.success}18`
+                    : `${BrandColors.orange}18`,
+              },
+            ]}>
+            <Ionicons
+              name="repeat-outline"
+              size={22}
+              color={followup?.status === 'active' ? BrandColors.success : BrandColors.orange}
+            />
+          </View>
+          <View style={styles.cardText}>
+            <Text style={styles.cardTitle}>Auto Follow-Up</Text>
+            <Text style={styles.cardBody}>
+              {followup == null || followup.status === 'rejected'
+                ? 'Let BayMo follow up with leads who go quiet.'
+                : followup.status === 'active'
+                  ? 'On — BayMo follows up with quiet leads for you.'
+                  : 'Being set up by the BaMo team.'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={BrandColors.textMuted} />
+        </Pressable>
       )}
 
       {canCreate ? null : !loading && (
