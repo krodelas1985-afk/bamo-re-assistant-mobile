@@ -64,10 +64,10 @@ export function LeadsEmptyState({ pageConnected }: { pageConnected: boolean }) {
 
       <ActionCard
         icon="sparkles-outline"
-        iconColor={BrandColors.textMuted}
+        iconColor={BrandColors.navy}
         title="Set up BayMo Automations"
-        body="Teach BayMo how to talk to your leads — coming soon."
-        disabled
+        body="Teach BayMo how to greet, qualify, and follow up with your leads."
+        onPress={() => router.push('/automations')}
       />
     </View>
   );

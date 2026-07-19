@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
 const ITEMS = [
+  { icon: 'sparkles-outline', title: 'BayMo Automations', subtitle: 'Let BayMo talk to your Leads', route: '/automations' },
   { icon: 'checkbox-outline', title: 'Tasks', subtitle: 'Today’s to-dos, deferred & done', route: '/tasks' },
   { icon: 'notifications-outline', title: 'Activity', subtitle: 'Lead assignments & handoffs', route: '/activity' },
   { icon: 'share-social-outline', title: 'Social Media', subtitle: 'Auto-posting, posts & videos', route: '/social' },
