@@ -8,14 +8,37 @@ import { supabase } from '@/lib/supabase';
  */
 
 export type AutomationStatus = 'draft' | 'pending_review' | 'active' | 'paused' | 'completed';
+export type AutomationScope = 'general' | 'project' | 'listing';
 
 export type Automation = {
   id: string;
   name: string;
   status: AutomationStatus;
-  scope: 'general' | 'project' | 'listing';
+  scope: AutomationScope;
+  isOrganicOwner: boolean;
   createdAt: string;
 };
+
+/** 3-slot model: 1 General + up to 2 Property/Project automations per client. */
+export const MAX_AUTOMATIONS = 3;
+
+export const SCOPE_OPTIONS = [
+  {
+    key: 'general' as const,
+    label: 'Everything I sell',
+    description: 'One assistant for all your properties. BayMo asks which one the lead means.',
+  },
+  {
+    key: 'project' as const,
+    label: 'One project',
+    description: 'Focused on a single development — every lead from its ads is about this project.',
+  },
+  {
+    key: 'listing' as const,
+    label: 'One listing',
+    description: 'Focused on one property you’re boosting.',
+  },
+];
 
 /** Goal presets → the free-text target_action W2 reads as the AI's objective. */
 export const AUTOMATION_GOALS = [
@@ -86,6 +109,15 @@ export const TIME_WINDOWS = [
 ] as const;
 
 export type AutomationDraft = {
+  scope: AutomationScope;
+  /** Project/listing name; listingId set when picked from the client's listings. */
+  scopedTitle: string;
+  listingId: string | null;
+  /** Scoped only: how ad leads reach this automation. */
+  adLinkMode: 'bamo_managed' | 'own_ad_id';
+  fbAdId: string;
+  /** Scoped only: claim organic/direct messages too (one owner per client). */
+  organicOwner: boolean;
   goal: GoalKey;
   tone: string;
   personaNotes: string;
@@ -101,14 +133,15 @@ export type AutomationDraft = {
 export async function fetchMyAutomations(): Promise<Automation[]> {
   const { data, error } = await supabase
     .from('campaigns')
-    .select('id, name, status, automation_scope, created_at')
+    .select('id, name, status, automation_scope, is_organic_owner, created_at')
     .order('created_at', { ascending: false });
   if (error || !data) return [];
   return data.map((c) => ({
     id: c.id,
     name: c.name,
     status: c.status as AutomationStatus,
-    scope: (c.automation_scope ?? 'general') as Automation['scope'],
+    scope: (c.automation_scope ?? 'general') as AutomationScope,
+    isOrganicOwner: !!c.is_organic_owner,
     createdAt: c.created_at,
   }));
 }
@@ -146,16 +179,30 @@ export async function submitAutomation(
     });
   }
 
+  const isGeneral = draft.scope === 'general';
+  const scopedRef = isGeneral
+    ? null
+    : {
+        kind: draft.scope,
+        title: draft.scopedTitle.trim(),
+        listing_id: draft.listingId,
+      };
+
   const { error } = await supabase.from('campaigns').insert({
     client_id: clientId,
     created_by: userId,
-    name: draft.name.trim() || 'My BayMo Assistant',
+    name:
+      draft.name.trim() ||
+      (isGeneral ? 'My BayMo Assistant' : `BayMo — ${draft.scopedTitle.trim() || 'Property'}`),
     channel: 'facebook',
     status: 'pending_review',
     is_active: false,
     campaign_type: 'buyer_leadgen',
-    automation_scope: 'general',
-    is_organic_owner: true,
+    automation_scope: draft.scope,
+    scoped_ref: scopedRef,
+    // General always owns organic traffic; a scoped automation only when the
+    // client opted in (wizard enforces one owner per client; DB unique index backs it).
+    is_organic_owner: isGeneral || draft.organicOwner,
     target_action: goal.targetAction,
     tone: draft.tone,
     conversational_ai_enabled: true,
@@ -169,6 +216,7 @@ export async function submitAutomation(
         window: draft.windowKey,
         enroll_existing: draft.enrollExisting,
         requested_sources: draft.sources,
+        ad_link: isGeneral ? null : draft.adLinkMode,
         submitted_at: new Date().toISOString(),
       },
     },
@@ -184,6 +232,11 @@ export async function submitAutomation(
       sources: draft.sources,
       new_leads_only: true,
       skip_if_active_campaign: true,
+      // Scoped automations claim leads via their ad; BaMo-managed ad IDs are
+      // filled in by the admin at activation.
+      ...(!isGeneral && draft.adLinkMode === 'own_ad_id' && draft.fbAdId.trim()
+        ? { fb_ad_id: draft.fbAdId.trim() }
+        : {}),
     },
   });
 

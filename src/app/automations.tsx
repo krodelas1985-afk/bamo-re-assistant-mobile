@@ -9,6 +9,7 @@ import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 import {
   Automation,
   FollowupRequest,
+  MAX_AUTOMATIONS,
   fetchLatestFollowupRequest,
   fetchMyAutomations,
 } from '@/lib/automations';
@@ -45,8 +46,9 @@ export default function AutomationsScreen() {
     }, []),
   );
 
-  // Phase 2a: one General automation per client. Property/project slots come later.
-  const canCreate = !loading && automations.length === 0;
+  // 3-slot model: 1 General + up to 2 Property/Project automations.
+  const openAutomations = automations.filter((a) => a.status !== 'completed');
+  const canCreate = !loading && openAutomations.length < MAX_AUTOMATIONS;
 
   return (
     <Screen title="BayMo Automations">
@@ -76,7 +78,15 @@ export default function AutomationsScreen() {
                 <Ionicons name={meta.icon} size={22} color={meta.color} />
               </View>
               <View style={styles.cardText}>
-                <Text style={styles.cardTitle}>{a.name}</Text>
+                <Text style={styles.cardTitle}>
+                  {a.name}
+                  {a.scope !== 'general' && (
+                    <Text style={styles.scopeTag}>
+                      {'  '}
+                      {a.scope === 'project' ? 'Project' : 'Listing'}
+                    </Text>
+                  )}
+                </Text>
                 <Text style={styles.cardBody}>
                   {a.status === 'pending_review'
                     ? 'The BaMo team is reviewing your setup — we’ll notify you when it’s live.'
@@ -166,10 +176,16 @@ export default function AutomationsScreen() {
         </Pressable>
       )}
 
-      {canCreate ? null : !loading && (
+      {!loading && automations.length > 0 && canCreate && (
+        <Button
+          label="Add automation for a listing or project"
+          onPress={() => router.push('/automation-new')}
+        />
+      )}
+      {!loading && !canCreate && (
         <Text style={styles.footnote}>
-          Want BayMo focused on a specific listing or project? That’s coming soon — message the
-          BaMo team in the meantime.
+          You’ve used all {MAX_AUTOMATIONS} automation slots. Message the BaMo team if you need
+          more.
         </Text>
       )}
     </Screen>
@@ -206,6 +222,7 @@ const styles = StyleSheet.create({
   },
   cardText: { flex: 1, gap: 2 },
   cardTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
+  scopeTag: { ...TypeScale.labelSmall, color: BrandColors.orange },
   cardBody: { ...TypeScale.bodySmall, color: BrandColors.textSecondary },
   statusPill: {
     borderWidth: 1,

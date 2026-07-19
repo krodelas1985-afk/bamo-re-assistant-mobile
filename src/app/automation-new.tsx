@@ -21,16 +21,20 @@ import {
   AUTOMATION_GOALS,
   AUTOMATION_TONES,
   AutomationDraft,
+  AutomationScope,
   MAX_QUAL_QUESTIONS,
   QUAL_LIBRARY,
+  SCOPE_OPTIONS,
   TIME_WINDOWS,
   fetchKbSourceCount,
+  fetchMyAutomations,
   submitAutomation,
 } from '@/lib/automations';
 import { fetchLatestPageConnectionRequest } from '@/lib/page-connection';
 import { fetchMyFbPageId } from '@/lib/leads';
+import { fetchListingOptions } from '@/lib/website';
 
-const STEPS = ['Goal', 'Style', 'Questions', 'Knowledge', 'Hours', 'Leads', 'Review'] as const;
+const STEPS = ['Type', 'Goal', 'Style', 'Questions', 'Knowledge', 'Hours', 'Leads', 'Review'] as const;
 
 const SOURCE_OPTIONS = [
   { key: 'messenger', label: 'Facebook Messenger', hint: 'People who message your Page' },
@@ -48,6 +52,12 @@ export default function AutomationNewScreen() {
   const [saving, setSaving] = useState(false);
 
   // Draft state
+  const [scope, setScope] = useState<AutomationScope>('general');
+  const [scopedTitle, setScopedTitle] = useState('');
+  const [listingId, setListingId] = useState<string | null>(null);
+  const [adLinkMode, setAdLinkMode] = useState<AutomationDraft['adLinkMode']>('bamo_managed');
+  const [fbAdId, setFbAdId] = useState('');
+  const [organicOwner, setOrganicOwner] = useState(false);
   const [goal, setGoal] = useState<AutomationDraft['goal']>('qualify');
   const [tone, setTone] = useState<string>('Friendly');
   const [personaNotes, setPersonaNotes] = useState('');
@@ -58,12 +68,24 @@ export default function AutomationNewScreen() {
   const [sources, setSources] = useState<string[]>(['messenger']);
   const [name, setName] = useState('My BayMo Assistant');
 
-  // Context for the Knowledge + Leads steps
+  // Context for the Type, Knowledge + Leads steps
   const [kbCount, setKbCount] = useState<number | null>(null);
   const [pageConnected, setPageConnected] = useState<boolean | null>(null);
+  const [listings, setListings] = useState<{ id: string; title: string }[]>([]);
+  const [hasGeneral, setHasGeneral] = useState(false);
+  const [hasOrganicOwner, setHasOrganicOwner] = useState(false);
 
   useEffect(() => {
     fetchKbSourceCount().then(setKbCount);
+    fetchListingOptions().then(setListings);
+    fetchMyAutomations().then((autos) => {
+      const open = autos.filter((a) => a.status !== 'completed');
+      const general = open.some((a) => a.scope === 'general');
+      setHasGeneral(general);
+      setHasOrganicOwner(open.some((a) => a.isOrganicOwner));
+      // A second automation can only be scoped.
+      if (general) setScope('project');
+    });
     Promise.all([fetchMyFbPageId(), fetchLatestPageConnectionRequest()]).then(
       ([pageId, req]) => setPageConnected(pageId != null || req?.status === 'connected'),
     );
@@ -85,6 +107,8 @@ export default function AutomationNewScreen() {
 
   const stepValid = () => {
     switch (STEPS[step]) {
+      case 'Type':
+        return scope === 'general' || scopedTitle.trim().length > 0 || listingId != null;
       case 'Questions':
         return questions.length >= 2 || (questions.length >= 1 && customQuestion.trim().length > 0);
       case 'Leads':
@@ -97,6 +121,10 @@ export default function AutomationNewScreen() {
   };
 
   const next = () => {
+    if (STEPS[step] === 'Type' && !stepValid()) {
+      Alert.alert('Which property?', 'Pick a listing or type the project/property name.');
+      return;
+    }
     if (STEPS[step] === 'Questions' && !stepValid()) {
       Alert.alert('Pick at least 2 questions', 'BayMo needs a few questions to qualify leads well.');
       return;
@@ -117,6 +145,15 @@ export default function AutomationNewScreen() {
     }
     setSaving(true);
     const { error } = await submitAutomation(clientId, userId, {
+      scope,
+      scopedTitle:
+        scope !== 'general' && listingId
+          ? (listings.find((l) => l.id === listingId)?.title ?? scopedTitle)
+          : scopedTitle,
+      listingId: scope === 'general' ? null : listingId,
+      adLinkMode,
+      fbAdId,
+      organicOwner: scope !== 'general' && organicOwner,
       goal,
       tone,
       personaNotes,
@@ -165,6 +202,52 @@ export default function AutomationNewScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {STEPS[step] === 'Type' && (
+          <>
+            <Text style={styles.question}>What is this automation for?</Text>
+            {SCOPE_OPTIONS.map((s) => {
+              const disabled = s.key === 'general' && hasGeneral;
+              return (
+                <View key={s.key} style={disabled && { opacity: 0.5 }}>
+                  <ChoiceCard
+                    title={s.label + (disabled ? ' — already set up' : '')}
+                    body={s.description}
+                    active={scope === s.key}
+                    onPress={() => {
+                      if (!disabled) setScope(s.key);
+                    }}
+                  />
+                </View>
+              );
+            })}
+            {scope !== 'general' && (
+              <>
+                <Text style={styles.section}>
+                  {scope === 'project' ? 'Which project?' : 'Which listing?'}
+                </Text>
+                {listings.length > 0 && (
+                  <View style={styles.pillRow}>
+                    {listings.slice(0, 8).map((l) => (
+                      <TagPill
+                        key={l.id}
+                        label={l.title || 'Untitled'}
+                        active={listingId === l.id}
+                        onPress={() => setListingId(listingId === l.id ? null : l.id)}
+                      />
+                    ))}
+                  </View>
+                )}
+                <TextField
+                  label={listingId ? 'Or type a different name' : 'Project / property name'}
+                  value={scopedTitle}
+                  onChangeText={setScopedTitle}
+                  placeholder="e.g. Vermira Living Spaces"
+                />
+              </>
+            )}
+          </>
+        )}
+
         {STEPS[step] === 'Goal' && (
           <>
             <Text style={styles.question}>What should BayMo do with new leads?</Text>
@@ -305,6 +388,52 @@ export default function AutomationNewScreen() {
               />
             </View>
 
+            {scope !== 'general' && (
+              <>
+                <Text style={[styles.question, { marginTop: 12 }]}>
+                  How do leads reach this automation?
+                </Text>
+                <ChoiceCard
+                  title="BaMo runs my ads (recommended)"
+                  body="We link the ads we set up for this property automatically."
+                  active={adLinkMode === 'bamo_managed'}
+                  onPress={() => setAdLinkMode('bamo_managed')}
+                />
+                <ChoiceCard
+                  title="I have my own Facebook Ad"
+                  body="Enter the Ad ID so BayMo knows which leads belong here."
+                  active={adLinkMode === 'own_ad_id'}
+                  onPress={() => setAdLinkMode('own_ad_id')}
+                />
+                {adLinkMode === 'own_ad_id' && (
+                  <TextField
+                    label="Facebook Ad ID"
+                    value={fbAdId}
+                    onChangeText={setFbAdId}
+                    placeholder="e.g. 120210000000000000"
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                )}
+                {!hasOrganicOwner && (
+                  <View style={styles.switchRow}>
+                    <View style={styles.switchText}>
+                      <Text style={styles.switchTitle}>Also answer direct messages</Text>
+                      <Text style={styles.switchBody}>
+                        People who message your Page directly (not from an ad) will also get this
+                        automation. Only one automation can do this.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={organicOwner}
+                      onValueChange={setOrganicOwner}
+                      trackColor={{ true: BrandColors.navy }}
+                    />
+                  </View>
+                )}
+              </>
+            )}
+
             <Text style={[styles.question, { marginTop: 12 }]}>Where do your leads come from?</Text>
             {SOURCE_OPTIONS.map((s) => (
               <ChoiceCard
@@ -329,6 +458,18 @@ export default function AutomationNewScreen() {
           <>
             <Text style={styles.question}>Ready to submit?</Text>
             <TextField label="Name your automation" value={name} onChangeText={setName} />
+            <ReviewRow
+              label="Type"
+              value={
+                scope === 'general'
+                  ? 'Everything I sell'
+                  : `${scope === 'project' ? 'Project' : 'Listing'}: ${
+                      listingId
+                        ? (listings.find((l) => l.id === listingId)?.title ?? scopedTitle)
+                        : scopedTitle
+                    }${organicOwner ? ' (also answers direct messages)' : ''}`
+              }
+            />
             <ReviewRow label="Goal" value={goalMeta.label} />
             <ReviewRow
               label="Style"
@@ -450,6 +591,7 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: BrandColors.orange },
   content: { padding: 16, gap: 10, paddingBottom: 32 },
   question: { ...TypeScale.h3, color: BrandColors.textHeading },
+  section: { ...TypeScale.h4, color: BrandColors.textHeading, marginTop: 8 },
   hint: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
   warn: { ...TypeScale.bodySmall, color: BrandColors.orange },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
