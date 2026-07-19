@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { LeadCard } from '@/components/lead-card';
+import { LeadsEmptyState } from '@/components/leads-empty-state';
 import { LeadFilterSheet } from '@/components/lead-filter-sheet';
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
@@ -215,6 +216,9 @@ export default function LeadsScreen() {
           <Text style={styles.errorDetail}>{error}</Text>
           <Button label="Try again" small onPress={load} style={styles.retry} />
         </View>
+      ) : leads.length === 0 && !filtering ? (
+        // Brand-new workspace: show the get-started funnel instead of empty copy.
+        <LeadsEmptyState pageConnected={fbPageId != null} />
       ) : visible.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyText}>
