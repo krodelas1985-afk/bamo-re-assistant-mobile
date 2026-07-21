@@ -10,9 +10,9 @@ const ITEMS = [
   { icon: 'sparkles-outline', title: 'BayMo Automations', subtitle: 'Let BayMo talk to your Leads', route: '/automations' },
   { icon: 'checkbox-outline', title: 'Tasks', subtitle: 'Today’s to-dos, deferred & done', route: '/tasks' },
   { icon: 'notifications-outline', title: 'Activity', subtitle: 'Lead assignments & handoffs', route: '/activity' },
-  { icon: 'share-social-outline', title: 'Social Media', subtitle: 'Auto-posting, posts & videos', route: '/social' },
   { icon: 'navigate-outline', title: 'Ads Management', subtitle: 'Performance, AI report, campaigns', route: '/ads' },
   { icon: 'globe-outline', title: 'My Website', subtitle: 'Your agent website, visits & leads', route: '/website' },
+  { icon: 'calendar-outline', title: 'Calendar', subtitle: 'Appointments & viewings', route: '/calendar' },
   { icon: 'document-text-outline', title: 'Documents', subtitle: 'Authority to Sell, MOA, CTS, LOI', route: '/documents' },
   { icon: 'settings-outline', title: 'Settings', subtitle: 'Profile, password, account', route: '/settings' },
 ] as const;

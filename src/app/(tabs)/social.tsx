@@ -140,14 +140,14 @@ export default function SocialScreen() {
 
   if (loading) {
     return (
-      <Screen title="Social Media" onBack={() => router.back()}>
+      <Screen title="Social Media">
         <ActivityIndicator color={BrandColors.navy} style={{ marginTop: 40 }} />
       </Screen>
     );
   }
 
   return (
-    <Screen title="Social Media" onBack={() => router.back()}>
+    <Screen title="Social Media">
       {/* Facebook Page */}
       <View style={styles.card}>
         <View style={styles.rowBetween}>

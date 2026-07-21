@@ -49,7 +49,7 @@ export default function CalendarScreen() {
   }, [load]);
 
   return (
-    <Screen title="Calendar">
+    <Screen title="Calendar" onBack={() => router.back()}>
       <Pressable style={styles.scheduleBtn} onPress={() => router.push('/appointment-new')}>
         <Ionicons name="add-circle" size={22} color={BrandColors.white} />
         <Text style={styles.scheduleText}>Schedule appointment</Text>
