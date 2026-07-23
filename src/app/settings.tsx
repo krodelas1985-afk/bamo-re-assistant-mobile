@@ -9,7 +9,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import {
   DEFAULT_PREFS,
   fetchPreferences,
@@ -221,6 +221,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 10,

@@ -5,7 +5,7 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import {
   Automation,
   FollowupRequest,
@@ -208,6 +208,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderWidth: 1,
     borderColor: BrandColors.border,
     borderRadius: Radii.card,

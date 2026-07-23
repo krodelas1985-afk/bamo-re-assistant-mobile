@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import {
   messengerInboxUrl,
   openCall,
@@ -344,6 +344,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 12,

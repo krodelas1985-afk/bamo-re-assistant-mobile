@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } fr
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { relativeTime } from '@/lib/leads';
 import {
   AdAccountStatus,
@@ -318,6 +318,7 @@ export default function AdsScreen() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 8,

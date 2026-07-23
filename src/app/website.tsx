@@ -18,7 +18,7 @@ import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { Website, fetchMyWebsite, fileWebsiteRequest } from '@/lib/website';
 
 export default function WebsiteScreen() {
@@ -320,6 +320,7 @@ const styles = StyleSheet.create({
   errorDetail: { ...TypeScale.bodySmall, color: BrandColors.textMuted, textAlign: 'center', paddingHorizontal: 24 },
   card: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 20,
     gap: 10,

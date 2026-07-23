@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } 
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import {
   AdPost,
   AdsPlanInfo,
@@ -321,6 +321,7 @@ export default function SocialScreen() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 10,

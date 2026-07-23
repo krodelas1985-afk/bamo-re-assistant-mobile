@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { TagPill } from '@/components/ui/tag-pill';
 import { TextField } from '@/components/ui/text-field';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { useAuth } from '@/contexts/auth-context';
 import {
   AUTOMATION_GOALS,
@@ -613,6 +613,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderWidth: 1,
     borderColor: BrandColors.border,
     borderRadius: Radii.card,

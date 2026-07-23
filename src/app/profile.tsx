@@ -10,7 +10,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { SelectField } from '@/components/ui/select-field';
 import { TextField } from '@/components/ui/text-field';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import psgc from '@/constants/psgc.json';
 import { Profile, useAuth } from '@/contexts/auth-context';
 import { updateProfile, uploadProfileImage } from '@/lib/settings';
@@ -230,6 +230,7 @@ function ProfileForm({ profile }: { profile: Profile | null }) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 10,

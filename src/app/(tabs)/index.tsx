@@ -8,7 +8,7 @@ import { NotificationBell } from '@/components/notification-bell';
 import { Screen } from '@/components/screen';
 import { Avatar } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { Announcement, fetchAnnouncements } from '@/lib/announcements';
 import { DailyDigest, fetchLatestDigest, visibleSuggestions } from '@/lib/digest';
 import { LeadStats, TodayActivity, fetchLeadStats, fetchTodayActivity, relativeTime } from '@/lib/leads';
@@ -279,6 +279,7 @@ const styles = StyleSheet.create({
   // Morning digest card
   digestCard: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 8,
@@ -319,6 +320,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     flexBasis: '47%',
@@ -337,6 +339,7 @@ const styles = StyleSheet.create({
   // Announcements
   announceCard: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 14,
     gap: 4,
@@ -365,6 +368,7 @@ const styles = StyleSheet.create({
   sectionLink: { ...TypeScale.bodyBold, color: BrandColors.orange },
   taskEmpty: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 6,
@@ -373,6 +377,7 @@ const styles = StyleSheet.create({
   taskEmptyText: { ...TypeScale.body, color: BrandColors.textSecondary },
   taskCard: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     paddingHorizontal: 14,
     paddingVertical: 12,

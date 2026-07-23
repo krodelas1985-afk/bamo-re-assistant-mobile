@@ -16,7 +16,7 @@ import {
   saveOnboardingStep,
   submitOnboarding,
 } from '@/lib/onboarding';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 
 const baymoAvatar = require('../../assets/brand/baymo.png');
 
@@ -359,6 +359,7 @@ const styles = StyleSheet.create({
   choiceList: { gap: 10 },
   choiceCard: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     borderWidth: 1.5,
     borderColor: BrandColors.border,
@@ -384,6 +385,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reviewCard: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     padding: 16,
     gap: 10,

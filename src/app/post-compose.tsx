@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { TagPill } from '@/components/ui/tag-pill';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import {
   Creative,
   ReferenceDoc,
@@ -567,6 +567,7 @@ const styles = StyleSheet.create({
   rowButtons: { flexDirection: 'row', gap: 10 },
   signatureCard: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     borderWidth: 1,
     borderColor: BrandColors.border,
