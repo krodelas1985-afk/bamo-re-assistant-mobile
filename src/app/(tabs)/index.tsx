@@ -1,48 +1,77 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { NotificationBell } from '@/components/notification-bell';
-import { Screen } from '@/components/screen';
-import { Avatar } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, BrandFonts, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { Announcement, fetchAnnouncements } from '@/lib/announcements';
 import { DailyDigest, fetchLatestDigest, visibleSuggestions } from '@/lib/digest';
-import { LeadStats, TodayActivity, fetchLeadStats, fetchTodayActivity, relativeTime } from '@/lib/leads';
-import { Task, completeTask, dueLabel, fetchTodayTasks, isOverdue, sourceMeta } from '@/lib/tasks';
+import { ChatMessage, QUICK_ACTIONS, QuickAction, sendToBayMo } from '@/lib/baymo-chat';
+import { LeadStats, TodayActivity, fetchLeadStats, fetchTodayActivity } from '@/lib/leads';
+import { Task, completeTask, dueLabel, fetchTodayTasks, isOverdue } from '@/lib/tasks';
+
+const baymoHead = require('../../../assets/brand/baymo-head.png');
 
 function greetingForNow(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Magandang umaga,';
-  if (hour < 18) return 'Magandang hapon,';
-  return 'Magandang gabi,';
+  if (hour < 12) return 'Magandang umaga';
+  if (hour < 18) return 'Magandang hapon';
+  return 'Magandang gabi';
 }
 
-const DASH = '—';
-
-/** "Today" / "Yesterday" / "Jul 9" for the digest's summarized day (Manila). */
-function digestDateLabel(ymd: string): string {
-  const manilaToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-  if (ymd === manilaToday) return 'Today';
-  const diff = Math.round(
-    (new Date(`${manilaToday}T00:00:00+08:00`).getTime() - new Date(`${ymd}T00:00:00+08:00`).getTime()) / 864e5,
+/** One assistant "message": avatar gutter + bubble-shaped content. */
+function BayMoRow({ children, tinted = false }: { children: React.ReactNode; tinted?: boolean }) {
+  return (
+    <View style={rowStyles.row}>
+      <Image source={baymoHead} style={rowStyles.avatar} contentFit="cover" />
+      <View style={[rowStyles.bubble, tinted && rowStyles.bubbleTinted]}>{children}</View>
+    </View>
   );
-  if (diff === 1) return 'Yesterday';
-  const [y, m, d] = ymd.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 }
+
+const rowStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 12 },
+  avatar: { width: 30, height: 30, borderRadius: Radii.pill },
+  bubble: {
+    flex: 1,
+    backgroundColor: BrandColors.white,
+    borderRadius: 20,
+    borderBottomLeftRadius: 4,
+    padding: 14,
+    gap: 8,
+    ...CardShadow,
+  },
+  bubbleTinted: { backgroundColor: BrandColors.coralSoft },
+});
 
 export default function HomeScreen() {
   const router = useRouter();
   const { profile, session } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
+
   const [stats, setStats] = useState<LeadStats | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [today, setToday] = useState<TodayActivity | null>(null);
   const [digest, setDigest] = useState<DailyDigest | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -59,7 +88,7 @@ export default function HomeScreen() {
       fetchLatestDigest().then((d) => {
         if (active) setDigest(d);
       });
-      fetchAnnouncements(3).then((a) => {
+      fetchAnnouncements(2).then((a) => {
         if (active) setAnnouncements(a);
       });
       return () => {
@@ -71,332 +100,361 @@ export default function HomeScreen() {
   const displayName =
     profile?.full_name?.split(/\s+/)[0] ?? session?.user.email?.split('@')[0] ?? 'Agent';
 
-  const cards = [
-    { label: 'New leads (7d)', value: stats ? String(stats.newThisWeek) : DASH },
-    { label: 'Hot leads', value: stats ? String(stats.hot) : DASH },
-    { label: 'Ready to follow up', value: stats ? String(stats.ready) : DASH },
-    { label: 'For viewing', value: stats ? String(stats.forViewing) : DASH },
-  ];
+  const attentionCount = stats ? stats.hot + stats.ready : null;
+  const suggestions = digest
+    ? visibleSuggestions(digest, profile?.role ?? null, session?.user.id ?? null)
+    : [];
+
+  const scrollToEnd = () =>
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+
+  const send = useCallback(
+    async (text: string, task: QuickAction['task'] = 'chat', documentType?: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || sending) return;
+      const history: ChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }));
+      setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
+      setInput('');
+      setSending(true);
+      scrollToEnd();
+      const { reply, error } = await sendToBayMo(
+        [...history, { role: 'user', content: trimmed }],
+        task,
+        documentType,
+      );
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: error ? `Sorry, may problema — ${error}. Pakisubukan ulit.` : reply || '…',
+        },
+      ]);
+      setSending(false);
+      scrollToEnd();
+    },
+    [messages, sending],
+  );
 
   const finishTask = async (id: string) => {
     setTasks((prev) => (prev ? prev.filter((t) => t.id !== id) : prev)); // optimistic
     await completeTask(id);
   };
 
+  const updateLine =
+    today === null
+      ? null
+      : !today.automationActive
+        ? `🌟 ${today.newToday} new lead${today.newToday === 1 ? '' : 's'} today. 🤖 Automation is off — activate a campaign and I'll handle them for you.`
+        : today.newToday > 0 || today.baymoHandled > 0
+          ? `🌟 ${today.newToday} new lead${today.newToday === 1 ? '' : 's'} today — I already replied to ${today.baymoHandled} of them. 💬`
+          : "All quiet so far — I'm watching your channels and will follow up the moment a lead comes in. 👌";
+
   return (
-    <Screen headerRight={<NotificationBell />}>
-      <View style={styles.greetingCard}>
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingText}>
-            <Text style={styles.greetingSmall}>{greetingForNow()}</Text>
-            <Text style={styles.greetingName}>{displayName} 👋</Text>
-          </View>
-          <Pressable onPress={() => router.push('/profile')} hitSlop={8}>
-            {profile?.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.greetingAvatar} />
-            ) : (
-              <View style={styles.greetingAvatarRing}>
-                <Avatar name={profile?.full_name ?? displayName} size={44} />
-              </View>
-            )}
-          </Pressable>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      {/* Header — Home IS BayMo's chat room */}
+      <View style={styles.header}>
+        <View style={styles.headerAvatarWrap}>
+          <Image source={baymoHead} style={styles.headerAvatar} contentFit="cover" />
+          <View style={styles.headerOnlineDot} />
         </View>
-        <Text style={styles.greetingBody}>
-          {today === null
-            ? "BaMo is handling the follow-ups. Here's what needs your attention."
-            : !today.automationActive
-              ? `🌟 ${today.newToday} new lead${today.newToday === 1 ? '' : 's'} today · 🤖 BaMo automation is off — activate a campaign and let BaMo handle them`
-              : today.newToday > 0 || today.baymoHandled > 0
-                ? `🌟 ${today.newToday} new lead${today.newToday === 1 ? '' : 's'} today · 💬 BaMo replied to ${today.baymoHandled} lead${today.baymoHandled === 1 ? '' : 's'} today`
-                : "BaMo is handling the follow-ups. Here's what needs your attention."}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>BayMo</Text>
+          <Text style={styles.headerSub}>● Your AI assistant</Text>
+        </View>
+        <NotificationBell />
       </View>
 
-      {/* Morning digest — yesterday's summary, generated 6:15 AM Manila */}
-      {digest && (
-        <View style={styles.digestCard}>
-          <View style={styles.digestHeader}>
-            <Text style={styles.digestTitle}>☀️ Yesterday with BaMo</Text>
-            <Text style={styles.digestDate}>{digestDateLabel(digest.digest_date)}</Text>
-          </View>
-          <Text style={styles.digestLine}>
-            🌟 {digest.metrics.new_leads} new lead{digest.metrics.new_leads === 1 ? '' : 's'} · 💬 BaMo
-            handled {digest.metrics.baymo_handled} · 🔥 {digest.metrics.turned_hot} turned Hot ·
-            ✅ {digest.metrics.turned_warm} turned Warm
-          </Text>
-          {!digest.metrics.automation_active && (
-            <View style={styles.digestNudge}>
-              <Text style={styles.digestNudgeText}>
-                🤖 BaMo automation is not active. Activate a campaign and BaMo will greet, qualify,
-                and follow up your new leads for you.
-              </Text>
-            </View>
-          )}
-          {visibleSuggestions(digest, profile?.role ?? null, session?.user.id ?? null).map((s) => (
-            <Pressable
-              key={s.lead_id}
-              style={styles.digestSuggestion}
-              onPress={() => router.push({ pathname: '/lead/[id]', params: { id: s.lead_id } })}>
-              <Text style={styles.digestSuggestionText} numberOfLines={1}>
-                {s.temperature === 'Hot' ? '🔥' : '✅'} <Text style={styles.digestSuggestionName}>{s.name}</Text> — {s.reason}
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={BrandColors.textMuted} />
-            </Pressable>
-          ))}
-        </View>
-      )}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={8}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.feed}>
+          {/* Greeting */}
+          <BayMoRow>
+            <Text style={styles.greeting}>
+              {greetingForNow()}, {displayName}! 👋
+            </Text>
+            <Text style={styles.bodyText}>
+              Kumusta? Here&apos;s where we are today — ask me anything or tap a shortcut below.
+            </Text>
+          </BayMoRow>
 
-      <View style={styles.statsGrid}>
-        {cards.map((s) => (
-          <View key={s.label} style={styles.statCard}>
-            <Text style={styles.statLabel}>{s.label}</Text>
-            <Text style={styles.statValue}>{s.value}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Announcements — platform-wide (BaMo) + this client's, pinned first */}
-      {announcements.length > 0 && (
-        <>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Announcements</Text>
-          </View>
-          {announcements.map((a) => (
-            <View key={a.id} style={styles.announceCard}>
-              <View style={styles.announceHeader}>
-                <Text style={styles.announceTitle} numberOfLines={1}>
-                  {a.pinned ? '📌 ' : ''}
-                  {a.title}
+          {/* Today's update */}
+          {updateLine ? (
+            <BayMoRow tinted>
+              <Text style={styles.bodyText}>{updateLine}</Text>
+              {digest ? (
+                <Text style={styles.metaText}>
+                  Yesterday: 🌟 {digest.metrics.new_leads} new · 💬 handled{' '}
+                  {digest.metrics.baymo_handled} · 🔥 {digest.metrics.turned_hot} hot · ✅{' '}
+                  {digest.metrics.turned_warm} warm
                 </Text>
-                <View style={[styles.announceChip, a.scope === 'baymo' && styles.announceChipBaymo]}>
-                  <Text
-                    style={[
-                      styles.announceChipText,
-                      a.scope === 'baymo' && styles.announceChipTextBaymo,
-                    ]}>
-                    {a.scope === 'baymo' ? 'BaMo' : 'Team'}
+              ) : null}
+            </BayMoRow>
+          ) : null}
+
+          {/* Leads that need attention */}
+          {attentionCount !== null && (
+            <BayMoRow>
+              <Text style={styles.cardTitle}>
+                {attentionCount > 0
+                  ? `🔥 ${attentionCount} lead${attentionCount === 1 ? '' : 's'} need${attentionCount === 1 ? 's' : ''} your attention`
+                  : '✅ No leads waiting on you right now'}
+              </Text>
+              {suggestions.map((s) => (
+                <Pressable
+                  key={s.lead_id}
+                  style={styles.leadRow}
+                  onPress={() => router.push({ pathname: '/lead/[id]', params: { id: s.lead_id } })}>
+                  <Text style={styles.leadRowText} numberOfLines={1}>
+                    {s.temperature === 'Hot' ? '🔥' : '✅'}{' '}
+                    <Text style={styles.leadRowName}>{s.name}</Text> — {s.reason}
                   </Text>
+                  <Ionicons name="chevron-forward" size={15} color={BrandColors.textMuted} />
+                </Pressable>
+              ))}
+              {attentionCount > 0 ? (
+                <Pressable style={styles.bubbleCta} onPress={() => router.push('/leads')}>
+                  <Text style={styles.bubbleCtaText}>Review leads</Text>
+                  <Ionicons name="arrow-forward" size={14} color={BrandColors.white} />
+                </Pressable>
+              ) : null}
+            </BayMoRow>
+          )}
+
+          {/* Today's tasks */}
+          {tasks !== null && (
+            <BayMoRow>
+              <Text style={styles.cardTitle}>
+                {tasks.length > 0
+                  ? `📋 Your tasks for today (${tasks.length})`
+                  : '🎉 All clear for today — walang pending tasks.'}
+              </Text>
+              {tasks.map((t) => (
+                <View key={t.id} style={styles.taskRow}>
+                  <Pressable onPress={() => finishTask(t.id)} hitSlop={8}>
+                    <Ionicons name="ellipse-outline" size={20} color={BrandColors.coral} />
+                  </Pressable>
+                  <Pressable style={{ flex: 1 }} onPress={() => router.push('/tasks')}>
+                    <Text style={styles.taskTitle} numberOfLines={1}>
+                      {t.title}
+                    </Text>
+                    <Text
+                      style={[styles.metaText, isOverdue(t) && { color: BrandColors.error }]}
+                      numberOfLines={1}>
+                      {dueLabel(t)}
+                      {t.lead_name ? ` · ${t.lead_name}` : ''}
+                    </Text>
+                  </Pressable>
+                </View>
+              ))}
+              <Pressable onPress={() => router.push(tasks.length > 0 ? '/tasks' : '/task-new')}>
+                <Text style={styles.linkText}>
+                  {tasks.length > 0 ? 'View all tasks →' : '+ Add a task'}
+                </Text>
+              </Pressable>
+            </BayMoRow>
+          )}
+
+          {/* Announcements */}
+          {announcements.length > 0 && (
+            <BayMoRow>
+              <Text style={styles.cardTitle}>📣 Heads up from BaMo</Text>
+              {announcements.map((a) => (
+                <View key={a.id} style={{ gap: 2 }}>
+                  <Text style={styles.taskTitle} numberOfLines={1}>
+                    {a.pinned ? '📌 ' : ''}
+                    {a.title}
+                  </Text>
+                  {!!a.body && (
+                    <Text style={styles.bodyText} numberOfLines={3}>
+                      {a.body}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </BayMoRow>
+          )}
+
+          {/* Live conversation */}
+          {messages.map((m, i) =>
+            m.role === 'assistant' ? (
+              <BayMoRow key={i}>
+                <Text style={styles.bodyText}>{m.content}</Text>
+              </BayMoRow>
+            ) : (
+              <View key={i} style={styles.userRow}>
+                <View style={styles.userBubble}>
+                  <Text style={styles.userText}>{m.content}</Text>
                 </View>
               </View>
-              {!!a.body && (
-                <Text style={styles.announceBody} numberOfLines={3}>
-                  {a.body}
-                </Text>
-              )}
-              <Text style={styles.announceDate}>{relativeTime(a.created_at)}</Text>
-            </View>
-          ))}
-        </>
-      )}
+            ),
+          )}
+          {sending && (
+            <BayMoRow>
+              <ActivityIndicator color={BrandColors.coral} />
+            </BayMoRow>
+          )}
+        </ScrollView>
 
-      {/* Today's tasks */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Today&apos;s tasks</Text>
-        <Pressable onPress={() => router.push('/tasks')} hitSlop={8}>
-          <Text style={styles.sectionLink}>View all →</Text>
-        </Pressable>
-      </View>
-      {tasks === null ? null : tasks.length === 0 ? (
-        <View style={styles.taskEmpty}>
-          <Text style={styles.taskEmptyText}>All clear for today 🎉 Add one anytime.</Text>
-          <Pressable onPress={() => router.push('/task-new')} hitSlop={8}>
-            <Text style={styles.sectionLink}>+ Add task</Text>
+        {/* Shortcuts + input — chat is always live on Home */}
+        <View style={styles.quickRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.quickPills}>
+              {QUICK_ACTIONS.map((qa) => (
+                <Pressable
+                  key={qa.label}
+                  style={styles.quickPill}
+                  onPress={() => send(qa.prompt, qa.task, qa.documentType)}>
+                  <Text style={styles.quickPillText}>{qa.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+        <View style={styles.inputBar}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Message BayMo…"
+            placeholderTextColor={BrandColors.textMuted}
+            multiline
+            onSubmitEditing={() => send(input)}
+          />
+          <Pressable
+            onPress={() => send(input)}
+            disabled={sending || !input.trim()}
+            style={[styles.sendBtn, (sending || !input.trim()) && styles.sendBtnDisabled]}>
+            <Ionicons name="arrow-up" size={18} color={BrandColors.white} />
           </Pressable>
         </View>
-      ) : (
-        tasks.map((t) => {
-          const src = sourceMeta(t, session?.user.id ?? null);
-          return (
-            <Pressable key={t.id} style={styles.taskCard} onPress={() => router.push('/tasks')}>
-              <Pressable style={styles.taskCheck} onPress={() => finishTask(t.id)} hitSlop={8}>
-                <Ionicons name="ellipse-outline" size={22} color={BrandColors.orange} />
-              </Pressable>
-              <View style={styles.taskText}>
-                <Text style={styles.taskTitle} numberOfLines={1}>
-                  {t.title}
-                </Text>
-                <Text style={[styles.taskMeta, isOverdue(t) && styles.taskMetaOverdue]} numberOfLines={1}>
-                  {dueLabel(t)}
-                  {t.lead_name ? ` · ${t.lead_name}` : ''}
-                </Text>
-              </View>
-              <View style={[styles.taskChip, src.kind === 'baymo' && styles.taskChipBaymo]}>
-                <Text style={[styles.taskChipText, src.kind === 'baymo' && styles.taskChipTextBaymo]}>
-                  {src.label}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })
-      )}
-    </Screen>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  greetingCard: {
-    backgroundColor: BrandColors.navyDeep,
-    borderRadius: Radii.cardLarge,
-    padding: 20,
-    gap: 4,
-  },
-  greetingRow: {
+  safe: { flex: 1, backgroundColor: BrandColors.screenBg },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BrandColors.border,
   },
-  greetingText: {
-    flex: 1,
-    gap: 4,
-  },
-  greetingAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  headerAvatarWrap: { width: 46, height: 46 },
+  headerAvatar: { width: 46, height: 46, borderRadius: Radii.pill },
+  headerOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: Radii.pill,
+    backgroundColor: BrandColors.success,
     borderWidth: 2,
-    borderColor: BrandColors.cream300,
-    backgroundColor: BrandColors.cream100,
+    borderColor: BrandColors.white,
   },
-  greetingAvatarRing: {
-    borderWidth: 2,
-    borderColor: BrandColors.cream300,
-    borderRadius: 26,
-    padding: 2,
+  headerTitle: { ...TypeScale.h2, color: BrandColors.ink },
+  headerSub: {
+    ...TypeScale.bodySmall,
+    fontFamily: BrandFonts.semiBold,
+    color: BrandColors.successDeep,
   },
-  greetingSmall: {
-    ...TypeScale.body,
-    color: BrandColors.cream300,
-  },
-  greetingName: {
-    ...TypeScale.h2,
-    color: BrandColors.white,
-  },
-  greetingBody: {
-    ...TypeScale.body,
-    color: BrandColors.cream200,
-    marginTop: 8,
-  },
-  // Morning digest card
-  digestCard: {
-    backgroundColor: BrandColors.white,
-    ...CardShadow,
-    borderRadius: Radii.card,
-    padding: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: BrandColors.cream400,
-  },
-  digestHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  digestTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
-  digestDate: { ...TypeScale.labelSmall, color: BrandColors.textMuted },
-  digestLine: { ...TypeScale.body, color: BrandColors.textBody },
-  digestNudge: {
-    backgroundColor: BrandColors.cream100,
-    borderRadius: Radii.button,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: BrandColors.orangeSoft,
-  },
-  digestNudgeText: { ...TypeScale.bodySmall, color: BrandColors.orangeDark },
-  digestSuggestion: {
+  feed: { padding: 20, paddingBottom: 12 },
+
+  greeting: { ...TypeScale.h3, color: BrandColors.ink },
+  bodyText: { ...TypeScale.body, color: BrandColors.ink },
+  metaText: { ...TypeScale.bodySmall, color: BrandColors.textSecondary },
+  cardTitle: { ...TypeScale.bodyBold, color: BrandColors.ink },
+  linkText: { ...TypeScale.bodyBold, color: BrandColors.coral },
+
+  leadRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderTopWidth: 1,
-    borderTopColor: BrandColors.border,
+    borderTopColor: BrandColors.borderLight,
   },
-  digestSuggestionText: { ...TypeScale.body, color: BrandColors.textBody, flex: 1 },
-  digestSuggestionName: { fontFamily: TypeScale.h4.fontFamily, color: BrandColors.textHeading },
-
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    backgroundColor: BrandColors.white,
-    ...CardShadow,
-    borderRadius: Radii.card,
-    padding: 16,
-    flexBasis: '47%',
-    flexGrow: 1,
-    gap: 4,
-  },
-  statLabel: {
-    ...TypeScale.label,
-    color: BrandColors.textSecondary,
-  },
-  statValue: {
-    ...TypeScale.h1,
-    color: BrandColors.navy,
-  },
-
-  // Announcements
-  announceCard: {
-    backgroundColor: BrandColors.white,
-    ...CardShadow,
-    borderRadius: Radii.card,
-    padding: 14,
-    gap: 4,
-  },
-  announceHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  announceTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading, flex: 1 },
-  announceChip: {
-    backgroundColor: BrandColors.cream200,
-    borderRadius: Radii.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  announceChipBaymo: { backgroundColor: BrandColors.orange },
-  announceChipText: { ...TypeScale.labelSmall, color: BrandColors.textSecondary },
-  announceChipTextBaymo: { color: BrandColors.white },
-  announceBody: { ...TypeScale.body, color: BrandColors.textBody },
-  announceDate: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
-
-  sectionHeader: {
+  leadRowText: { ...TypeScale.body, color: BrandColors.ink, flex: 1 },
+  leadRowName: { fontFamily: BrandFonts.semiBold },
+  bubbleCta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: BrandColors.coral,
+    borderRadius: Radii.pill,
+    paddingVertical: 10,
     marginTop: 4,
   },
-  sectionTitle: { ...TypeScale.h3, color: BrandColors.textHeading },
-  sectionLink: { ...TypeScale.bodyBold, color: BrandColors.orange },
-  taskEmpty: {
-    backgroundColor: BrandColors.white,
-    ...CardShadow,
-    borderRadius: Radii.card,
-    padding: 16,
-    gap: 6,
-    alignItems: 'center',
-  },
-  taskEmptyText: { ...TypeScale.body, color: BrandColors.textSecondary },
-  taskCard: {
-    backgroundColor: BrandColors.white,
-    ...CardShadow,
-    borderRadius: Radii.card,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  bubbleCtaText: { ...TypeScale.bodyBold, color: BrandColors.white },
+
+  taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: BrandColors.borderLight,
   },
-  taskCheck: { padding: 2 },
-  taskText: { flex: 1, gap: 1 },
-  taskTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
-  taskMeta: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
-  taskMetaOverdue: { color: BrandColors.error },
-  taskChip: {
-    backgroundColor: BrandColors.cream200,
+  taskTitle: { ...TypeScale.bodyBold, color: BrandColors.ink },
+
+  userRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 12 },
+  userBubble: {
+    maxWidth: '78%',
+    backgroundColor: BrandColors.ink,
+    borderRadius: 20,
+    borderBottomRightRadius: 4,
+    padding: 13,
+  },
+  userText: { ...TypeScale.body, color: BrandColors.white },
+
+  quickRow: { paddingHorizontal: 16, paddingBottom: 6 },
+  quickPills: { flexDirection: 'row', gap: 8 },
+  quickPill: {
+    backgroundColor: BrandColors.white,
+    borderWidth: 1,
+    borderColor: BrandColors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: Radii.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
   },
-  taskChipBaymo: { backgroundColor: BrandColors.navy },
-  taskChipText: { ...TypeScale.labelSmall, color: BrandColors.textSecondary },
-  taskChipTextBaymo: { color: BrandColors.white },
+  quickPillText: { ...TypeScale.label, color: BrandColors.ink },
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 6,
+    paddingLeft: 8,
+    paddingRight: 6,
+    backgroundColor: BrandColors.white,
+    borderRadius: Radii.pill,
+    borderWidth: 1,
+    borderColor: BrandColors.border,
+  },
+  input: {
+    flex: 1,
+    maxHeight: 120,
+    minHeight: 36,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    ...TypeScale.body,
+    color: BrandColors.ink,
+  },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radii.pill,
+    backgroundColor: BrandColors.coral,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnDisabled: { backgroundColor: BrandColors.disabled },
 });
