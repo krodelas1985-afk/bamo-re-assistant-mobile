@@ -5,11 +5,11 @@ import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 export type BadgeTone = 'success' | 'warm' | 'info' | 'error' | 'neutral';
 
 const TONES: Record<BadgeTone, { bg: string; fg: string }> = {
-  success: { bg: '#E9F9F0', fg: '#1B9E5A' }, // "Ready", "Active"
-  warm: { bg: BrandColors.cream200, fg: BrandColors.orangeDark }, // "Qualified", "Reserved"
-  info: { bg: '#EAEEF9', fg: BrandColors.navy }, // "New", "For Viewing"
-  error: { bg: '#FDECEA', fg: BrandColors.error },
-  neutral: { bg: BrandColors.border, fg: BrandColors.textSecondary },
+  success: { bg: BrandColors.successSoft, fg: BrandColors.successDeep }, // "Ready", "Active"
+  warm: { bg: BrandColors.coralSoft, fg: BrandColors.coralDark }, // "Qualified", "Reserved"
+  info: { bg: BrandColors.infoSoft, fg: BrandColors.infoDeep }, // "New", "For Viewing"
+  error: { bg: BrandColors.errorSoft, fg: BrandColors.errorDeep },
+  neutral: { bg: BrandColors.cream200, fg: BrandColors.textSecondary },
 };
 
 /** Small status pill — e.g. lead status, listing availability. */

@@ -14,9 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, TypeScale } from '@/constants/brand';
 
-const baymoAvatar = require('../../assets/brand/baymo.png');
+const baymoAvatar = require('../../assets/brand/baymo-head.png');
 
 export default function LoginScreen() {
   const { session, loading, signIn } = useAuth();
@@ -129,27 +129,32 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   baymo: {
-    width: 110,
-    height: 110,
+    width: 96,
+    height: 96,
+    borderRadius: 28,
+    backgroundColor: BrandColors.white,
+    ...CardShadow,
   },
   wordmark: {
     ...TypeScale.h1,
-    color: BrandColors.navy,
+    color: BrandColors.ink,
+    marginTop: 10,
   },
   tagline: {
     ...TypeScale.labelSmall,
-    color: BrandColors.orangeDark,
+    color: BrandColors.coralDark,
     letterSpacing: 2,
   },
   card: {
     backgroundColor: BrandColors.white,
-    borderRadius: Radii.card,
-    padding: 20,
+    borderRadius: 26,
+    padding: 22,
     gap: 14,
+    ...CardShadow,
   },
   welcome: {
-    ...TypeScale.h3,
-    color: BrandColors.textHeading,
+    ...TypeScale.h2,
+    color: BrandColors.ink,
   },
   subtitle: {
     ...TypeScale.body,
@@ -159,18 +164,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    ...TypeScale.label,
-    color: BrandColors.textSecondary,
+    ...TypeScale.labelSmall,
+    color: BrandColors.ink,
   },
   input: {
     ...TypeScale.input,
-    borderWidth: 1,
-    borderColor: BrandColors.borderDark,
-    borderRadius: Radii.button,
+    borderWidth: 1.5,
+    borderColor: BrandColors.border,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: BrandColors.textHeading,
-    backgroundColor: BrandColors.white,
+    paddingVertical: 12,
+    color: BrandColors.ink,
+    backgroundColor: '#FBFAF7',
   },
   error: {
     ...TypeScale.formError,

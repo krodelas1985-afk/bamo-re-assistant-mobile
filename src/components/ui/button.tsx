@@ -25,8 +25,8 @@ export function Button({
         styles.base,
         small && styles.small,
         variant === 'primary'
-          ? { backgroundColor: pressed ? BrandColors.orangeDark : BrandColors.orange }
-          : [styles.secondary, pressed && { backgroundColor: BrandColors.cream50 }],
+          ? [styles.primary, pressed && { backgroundColor: BrandColors.coralDark }]
+          : [styles.secondary, pressed && { backgroundColor: BrandColors.cream100 }],
         style,
       ]}>
       <Text
@@ -48,6 +48,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primary: {
+    backgroundColor: BrandColors.coral,
+    shadowColor: BrandColors.coral,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
   small: {
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -55,7 +63,7 @@ const styles = StyleSheet.create({
   secondary: {
     backgroundColor: BrandColors.white,
     borderWidth: 1,
-    borderColor: BrandColors.borderDark,
+    borderColor: BrandColors.border,
   },
   text: {
     ...TypeScale.button,

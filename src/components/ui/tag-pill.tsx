@@ -26,7 +26,7 @@ export function TagPill({
       <Text
         style={[
           styles.text,
-          { color: cream ? BrandColors.orangeDark : active ? BrandColors.textHeading : BrandColors.textMuted },
+          { color: cream ? BrandColors.coralDark : active ? BrandColors.white : BrandColors.ink },
         ]}>
         {label}
       </Text>
@@ -42,18 +42,15 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   active: {
-    backgroundColor: BrandColors.white,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    backgroundColor: BrandColors.ink,
   },
   inactive: {
-    backgroundColor: 'transparent',
+    backgroundColor: BrandColors.white,
+    borderWidth: 1,
+    borderColor: BrandColors.border,
   },
   cream: {
-    backgroundColor: BrandColors.cream200,
+    backgroundColor: BrandColors.coralSoft,
     paddingVertical: 4,
   },
   text: {

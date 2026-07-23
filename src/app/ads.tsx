@@ -29,7 +29,7 @@ import {
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
   active: { label: 'Active', color: '#1E7B45', bg: '#E7F7EE' },
   paused: { label: 'Paused', color: '#854F0B', bg: '#FDF2E6' },
-  completed: { label: 'Completed', color: '#1F3C88', bg: '#E8EBF3' },
+  completed: { label: 'Completed', color: '#0F172A', bg: '#E8EBF3' },
   draft: { label: 'Draft', color: '#5B5B5B', bg: '#F1EFE8' },
   failed: { label: 'Failed', color: '#E74C3C', bg: '#FDECEA' },
 };

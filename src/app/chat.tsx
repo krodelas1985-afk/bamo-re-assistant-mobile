@@ -24,9 +24,9 @@ import {
   executePendingAction,
   sendToBayMo,
 } from '@/lib/baymo-chat';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, BrandFonts, CardShadow, Radii, TypeScale } from '@/constants/brand';
 
-const baymoAvatar = require('../../assets/brand/baymo.png');
+const baymoAvatar = require('../../assets/brand/baymo-head.png');
 
 /**
  * Chat message plus an optional action card. BayMo proposes actions (e.g.
@@ -132,12 +132,15 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
-          <Ionicons name="chevron-back" size={24} color={BrandColors.navy} />
+          <Ionicons name="chevron-back" size={20} color={BrandColors.ink} />
         </Pressable>
-        <Image source={baymoAvatar} style={styles.headerAvatar} contentFit="cover" />
+        <View style={styles.headerAvatarWrap}>
+          <Image source={baymoAvatar} style={styles.headerAvatar} contentFit="cover" />
+          <View style={styles.headerOnlineDot} />
+        </View>
         <View style={styles.flex}>
           <Text style={styles.headerTitle}>BayMo</Text>
-          <Text style={styles.headerSub}>Your AI assistant</Text>
+          <Text style={styles.headerSub}>● Your AI assistant</Text>
         </View>
       </View>
 
@@ -250,35 +253,50 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: BrandColors.white,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: BrandColors.border,
   },
-  back: { padding: 2 },
-  headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.pill,
-    borderWidth: 1.5,
-    borderColor: BrandColors.orange,
+  back: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: BrandColors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...CardShadow,
   },
-  headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
-  headerSub: { ...TypeScale.bodySmall, color: BrandColors.success },
+  headerAvatarWrap: { width: 46, height: 46 },
+  headerAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: Radii.pill,
+  },
+  headerOnlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: Radii.pill,
+    backgroundColor: BrandColors.success,
+    borderWidth: 2,
+    borderColor: BrandColors.white,
+  },
+  headerTitle: { ...TypeScale.h2, color: BrandColors.ink },
+  headerSub: { ...TypeScale.bodySmall, fontFamily: BrandFonts.semiBold, color: BrandColors.successDeep },
   messages: { padding: 16, gap: 12 },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '100%' },
   rowUser: { justifyContent: 'flex-end' },
   rowAssistant: { justifyContent: 'flex-start' },
   bubbleAvatar: { width: 28, height: 28, borderRadius: Radii.pill },
-  bubble: { maxWidth: '78%', borderRadius: Radii.card, padding: 12 },
-  userBubble: { backgroundColor: BrandColors.navy, borderBottomRightRadius: 4 },
+  bubble: { maxWidth: '78%', borderRadius: 20, padding: 13, ...CardShadow },
+  userBubble: { backgroundColor: BrandColors.ink, borderBottomRightRadius: 4 },
   botBubble: {
     backgroundColor: BrandColors.white,
     borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: BrandColors.border,
   },
   userText: { ...TypeScale.body, color: BrandColors.white },
   botText: { ...TypeScale.body, color: BrandColors.textBody },
@@ -326,27 +344,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    marginTop: 2,
+    paddingVertical: 6,
+    paddingLeft: 8,
+    paddingRight: 6,
     backgroundColor: BrandColors.white,
-    borderTopWidth: 1,
-    borderTopColor: BrandColors.border,
+    borderRadius: Radii.pill,
+    borderWidth: 1,
+    borderColor: BrandColors.border,
   },
   input: {
     flex: 1,
     maxHeight: 120,
-    minHeight: 44,
-    backgroundColor: BrandColors.screenBg,
-    borderRadius: Radii.card,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 36,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
     ...TypeScale.body,
-    color: BrandColors.textHeading,
+    color: BrandColors.ink,
   },
   sendBtn: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.coral,
     alignItems: 'center',
     justifyContent: 'center',
   },

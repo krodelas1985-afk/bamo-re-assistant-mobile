@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BaymoBubble } from '@/components/baymo-bubble';
-import { BrandColors, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, TypeScale } from '@/constants/brand';
 
 /** Standard screen shell: gray app background, safe area, optional title header, scrollable content. */
 export function Screen({
@@ -30,7 +30,7 @@ export function Screen({
         <View style={styles.header}>
           {onBack ? (
             <Pressable onPress={onBack} hitSlop={12} style={styles.back}>
-              <Ionicons name="chevron-back" size={24} color={BrandColors.textHeading} />
+              <Ionicons name="chevron-back" size={20} color={BrandColors.ink} />
             </Pressable>
           ) : null}
           {title ? <Text style={styles.headerTitle}>{title}</Text> : null}
@@ -51,23 +51,29 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
+    gap: 12,
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
   back: {
-    marginLeft: -6,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: BrandColors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...CardShadow,
   },
   headerRight: {
     marginLeft: 'auto',
   },
   headerTitle: {
-    ...TypeScale.h3,
-    color: BrandColors.textHeading,
+    ...TypeScale.h1,
+    color: BrandColors.ink,
   },
   content: {
-    padding: 16,
+    padding: 20,
     gap: 12,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
 });

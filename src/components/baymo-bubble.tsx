@@ -1,62 +1,63 @@
 import { Image } from 'expo-image';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BrandColors, Radii } from '@/constants/brand';
+import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
-const baymoAvatar = require('../../assets/brand/baymo.png');
+const baymoHead = require('../../assets/brand/baymo-head.png');
 
 /**
- * BayMo floating chat bubble — bottom-right on every main screen.
- * Circular avatar with orange ring and green online dot.
- * Opens the assistant chat (Phase 4); onPress is a no-op until then.
+ * BayMo floating chat pill — bottom-right on every main screen.
+ * White pill: BayMo head avatar + name + green online dot (warm-cream system).
  */
 export function BaymoBubble({ onPress }: { onPress?: () => void }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityLabel="Chat with BayMo, your AI assistant"
-      style={({ pressed }) => [styles.bubble, pressed && styles.pressed]}>
-      <Image source={baymoAvatar} style={styles.avatar} contentFit="cover" />
+      style={({ pressed }) => [styles.pill, pressed && styles.pressed]}>
+      <Image source={baymoHead} style={styles.avatar} contentFit="cover" />
+      <Text style={styles.name}>BayMo</Text>
       <View style={styles.onlineDot} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  bubble: {
+  pill: {
     position: 'absolute',
     right: 16,
-    bottom: 20,
-    width: 56,
-    height: 56,
+    bottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+    paddingLeft: 6,
+    paddingRight: 12,
     borderRadius: Radii.pill,
-    borderWidth: 2.5,
-    borderColor: BrandColors.orange,
     backgroundColor: BrandColors.white,
-    overflow: 'visible',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: BrandColors.ink,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
   pressed: {
     transform: [{ scale: 0.94 }],
   },
   avatar: {
-    width: '100%',
-    height: '100%',
+    width: 32,
+    height: 32,
     borderRadius: Radii.pill,
   },
+  name: {
+    ...TypeScale.bodyBold,
+    fontSize: 12,
+    color: BrandColors.ink,
+  },
   onlineDot: {
-    position: 'absolute',
-    right: 0,
-    bottom: 2,
-    width: 13,
-    height: 13,
+    width: 8,
+    height: 8,
     borderRadius: Radii.pill,
     backgroundColor: BrandColors.success,
-    borderWidth: 2,
-    borderColor: BrandColors.white,
   },
 });
