@@ -297,8 +297,8 @@ const styles = StyleSheet.create({
     borderRadius: Radii.button,
   },
   cellText: { ...TypeScale.body, color: BrandColors.textHeading },
-  cellTextSelected: { color: BrandColors.white, fontFamily: 'Poppins_600SemiBold' },
-  cellTextToday: { color: BrandColors.orange, fontFamily: 'Poppins_600SemiBold' },
+  cellTextSelected: { color: BrandColors.white, fontFamily: 'Inter_600SemiBold' },
+  cellTextToday: { color: BrandColors.orange, fontFamily: 'Inter_600SemiBold' },
 
   timeLabel: { ...TypeScale.label, color: BrandColors.textSecondary, marginTop: 4 },
   pillWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

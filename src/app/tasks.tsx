@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   cardText: { flex: 1, gap: 2 },
   cardTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
   cardDue: { ...TypeScale.bodySmall, color: BrandColors.textSecondary },
-  cardDueOverdue: { color: BrandColors.error, fontFamily: 'Poppins_600SemiBold' },
+  cardDueOverdue: { color: BrandColors.error, fontFamily: 'Inter_600SemiBold' },
   cardLead: { ...TypeScale.bodySmall, color: BrandColors.navy, marginTop: 2 },
   cardNotes: { ...TypeScale.bodySmall, color: BrandColors.textMuted, marginTop: 2 },
   chip: {

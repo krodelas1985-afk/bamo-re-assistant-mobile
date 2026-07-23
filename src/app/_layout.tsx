@@ -1,10 +1,10 @@
+import { InstrumentSerif_400Regular } from '@expo-google-fonts/instrument-serif';
 import {
-  Poppins_400Regular,
-  Poppins_500Medium,
-  Poppins_600SemiBold,
-  Poppins_700Bold,
-} from '@expo-google-fonts/poppins';
-import { Inter_400Regular } from '@expo-google-fonts/inter';
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
 import * as Notifications from 'expo-notifications';
@@ -41,11 +41,11 @@ function openFromNotification(response: Notifications.NotificationResponse | nul
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Poppins_400Regular,
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
+    InstrumentSerif_400Regular,
     Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   });
 
   useEffect(() => {
