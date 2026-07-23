@@ -15,7 +15,7 @@ import {
   timeLabel,
   typeMeta,
 } from '@/lib/appointments';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 
 export default function CalendarScreen() {
   const router = useRouter();
@@ -48,10 +48,39 @@ export default function CalendarScreen() {
     }
   }, [load]);
 
+  const week = useMemo(() => {
+    const days = [];
+    const today = new Date();
+    const hasApptOn = (d: Date) =>
+      items.some((a) => new Date(a.scheduled_at).toDateString() === d.toDateString());
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      days.push({
+        dow: d.toLocaleDateString('en-PH', { weekday: 'short' }),
+        num: d.getDate(),
+        isToday: i === 0,
+        hasAppt: hasApptOn(d),
+      });
+    }
+    return days;
+  }, [items]);
+
   return (
     <Screen title="Calendar" onBack={() => router.back()}>
+      <View style={styles.weekStrip}>
+        {week.map((d) => (
+          <View key={d.dow + d.num} style={[styles.dayCell, d.isToday && styles.dayCellToday]}>
+            <Text style={[styles.dayDow, d.isToday && styles.dayDowToday]}>{d.dow}</Text>
+            <Text style={[styles.dayNum, d.isToday && styles.dayNumToday]}>{d.num}</Text>
+            {d.hasAppt ? <View style={styles.dayDot} /> : null}
+          </View>
+        ))}
+      </View>
       <Pressable style={styles.scheduleBtn} onPress={() => router.push('/appointment-new')}>
-        <Ionicons name="add-circle" size={22} color={BrandColors.white} />
+        <View style={styles.scheduleIcon}>
+          <Ionicons name="add" size={16} color={BrandColors.white} />
+        </View>
         <Text style={styles.scheduleText}>Schedule appointment</Text>
       </Pressable>
 
@@ -67,8 +96,12 @@ export default function CalendarScreen() {
         </View>
       ) : items.length === 0 ? (
         <View style={styles.center}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="calendar-outline" size={34} color={BrandColors.infoDeep} />
+          </View>
+          <Text style={styles.emptyTitle}>Wala pang appointments</Text>
           <Text style={styles.emptyText}>
-            No upcoming appointments. Tap “Schedule appointment” to add a viewing or a call. 📅
+            Tap “Schedule appointment” to add a property viewing or a call with a lead.
           </Text>
         </View>
       ) : (
@@ -123,23 +156,68 @@ function AppointmentCard({
 }
 
 const styles = StyleSheet.create({
+  weekStrip: { flexDirection: 'row', gap: 6 },
+  dayCell: {
+    flex: 1,
+    backgroundColor: BrandColors.white,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    borderRadius: 14,
+    alignItems: 'center',
+    ...CardShadow,
+  },
+  dayCellToday: { backgroundColor: BrandColors.ink },
+  dayDow: { ...TypeScale.labelSmall, color: BrandColors.textSecondary },
+  dayDowToday: { color: 'rgba(255,255,255,.7)' },
+  dayNum: { ...TypeScale.h3, color: BrandColors.ink, marginTop: 2 },
+  dayNumToday: { color: BrandColors.white },
+  dayDot: {
+    width: 5,
+    height: 5,
+    borderRadius: Radii.pill,
+    backgroundColor: BrandColors.coral,
+    marginTop: 4,
+  },
   scheduleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: BrandColors.orange,
+    gap: 10,
+    backgroundColor: BrandColors.coral,
     borderRadius: Radii.button,
-    paddingVertical: 14,
+    paddingVertical: 16,
+    shadowColor: BrandColors.coral,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  scheduleIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: Radii.pill,
+    backgroundColor: 'rgba(255,255,255,.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scheduleText: { ...TypeScale.button, color: BrandColors.white },
   center: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48, gap: 10 },
+  emptyIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: BrandColors.infoSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyTitle: { ...TypeScale.h2, color: BrandColors.ink, textAlign: 'center' },
   emptyText: { ...TypeScale.body, color: BrandColors.textSecondary, textAlign: 'center', paddingHorizontal: 24 },
   errorDetail: { ...TypeScale.bodySmall, color: BrandColors.textMuted, textAlign: 'center', paddingHorizontal: 24 },
   retry: { marginTop: 4 },
   group: { gap: 10 },
   groupLabel: { ...TypeScale.label, color: BrandColors.textMuted, marginTop: 4 },
-  card: { backgroundColor: BrandColors.white, borderRadius: Radii.card, padding: 16, gap: 12 },
+  card: { backgroundColor: BrandColors.white, borderRadius: Radii.card, padding: 16, gap: 12, ...CardShadow },
   topRow: { flexDirection: 'row', gap: 12 },
   iconCircle: {
     width: 44,

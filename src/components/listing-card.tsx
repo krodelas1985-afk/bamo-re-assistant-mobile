@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Badge, BadgeTone } from '@/components/ui/badge';
 import { TagPill } from '@/components/ui/tag-pill';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 
 export type Listing = {
   id: string;
@@ -62,6 +62,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: BrandColors.white,
+    ...CardShadow,
     borderRadius: Radii.card,
     overflow: 'hidden',
   },

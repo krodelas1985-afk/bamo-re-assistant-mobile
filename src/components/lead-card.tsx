@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import type { Lead } from '@/lib/leads';
 
 export type { Lead };
@@ -60,9 +60,10 @@ const styles = StyleSheet.create({
     borderRadius: Radii.card,
     padding: 16,
     gap: 12,
+    ...CardShadow,
   },
   cardPressed: {
-    backgroundColor: BrandColors.cream50,
+    backgroundColor: BrandColors.cream100,
   },
   topRow: {
     flexDirection: 'row',
@@ -82,7 +83,7 @@ const styles = StyleSheet.create({
     color: BrandColors.textMuted,
   },
   summaryBox: {
-    backgroundColor: BrandColors.screenBg,
+    backgroundColor: BrandColors.cream100,
     borderRadius: Radii.button,
     padding: 12,
   },

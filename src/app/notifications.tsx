@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
-import { BrandColors, Radii, TypeScale } from '@/constants/brand';
+import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { relativeTime } from '@/lib/leads';
 import {
   AppNotification,
@@ -143,25 +143,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   markAll: { alignSelf: 'flex-end', paddingVertical: 2, paddingHorizontal: 4 },
-  markAllText: { ...TypeScale.label, color: BrandColors.navy },
+  markAllText: { ...TypeScale.label, color: BrandColors.coral },
   row: {
     backgroundColor: BrandColors.white,
     borderRadius: Radii.card,
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
+    ...CardShadow,
   },
   rowUnread: {
-    backgroundColor: BrandColors.cream100,
+    backgroundColor: BrandColors.coralSoft,
   },
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     backgroundColor: BrandColors.white,
     alignItems: 'center',
     justifyContent: 'center',
+    ...CardShadow,
   },
   rowText: { flex: 1, gap: 2 },
   rowTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
