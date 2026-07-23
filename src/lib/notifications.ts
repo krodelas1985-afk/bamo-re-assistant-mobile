@@ -63,11 +63,17 @@ export async function fetchNotifications(): Promise<{ data: AppNotification[]; e
 /**
  * High-priority notification types that mean "a lead needs the agent personally"
  * — e.g. a B2B lead asked for a call, wants to reserve/buy, or an urgent issue the
- * AI escalated. These are surfaced on Home as an urgent BayMo flag (not just in the
- * Notification Center). Written server-side by the campaign responder's escalation
- * path (replaces the old email-only alert).
+ * AI escalated. Surfaced on Home as an urgent BayMo flag (not just in the
+ * Notification Center).
+ *
+ * Contract: the campaign responder's `notify_agent` path (n8n Workflow 2) inserts
+ * `lead_action_needed` via create_notification(), data `{ lead_id, route }`, IN
+ * ADDITION to the Resend email. Any campaign that adopts the same insert lights up
+ * here automatically — no mobile change needed. `lead_action_needed` is the live
+ * type; the rest are reserved aliases for future escalation sources.
  */
 export const ATTENTION_TYPES = [
+  'lead_action_needed',
   'lead_needs_attention',
   'lead_call_request',
   'lead_escalation',
