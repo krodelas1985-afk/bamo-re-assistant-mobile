@@ -51,7 +51,7 @@ export default function AutomationsScreen() {
   const canCreate = !loading && openAutomations.length < MAX_AUTOMATIONS;
 
   return (
-    <Screen title="BayMo Automations">
+    <Screen title="BayMo Automations" onBack={() => router.back()}>
       <Text style={styles.tagline}>Let BayMo talk to your Leads</Text>
 
       {loading ? (
