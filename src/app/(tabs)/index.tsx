@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NotificationBell } from '@/components/notification-bell';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, BrandFonts, CardShadow, Radii, TypeScale } from '@/constants/brand';
+import { AppNotification, fetchAttentionFlags, markNotificationRead } from '@/lib/notifications';
 import { Announcement, fetchAnnouncements } from '@/lib/announcements';
 import { DailyDigest, fetchLatestDigest, visibleSuggestions } from '@/lib/digest';
 import { ChatMessage, QUICK_ACTIONS, QuickAction, sendToBayMo } from '@/lib/baymo-chat';
@@ -68,6 +69,7 @@ export default function HomeScreen() {
   const [today, setToday] = useState<TodayActivity | null>(null);
   const [digest, setDigest] = useState<DailyDigest | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [flags, setFlags] = useState<AppNotification[]>([]);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -91,6 +93,9 @@ export default function HomeScreen() {
       fetchAnnouncements(2).then((a) => {
         if (active) setAnnouncements(a);
       });
+      fetchAttentionFlags().then((f) => {
+        if (active) setFlags(f);
+      });
       return () => {
         active = false;
       };
@@ -100,7 +105,14 @@ export default function HomeScreen() {
   const displayName =
     profile?.full_name?.split(/\s+/)[0] ?? session?.user.email?.split('@')[0] ?? 'Agent';
 
-  const attentionCount = stats ? stats.hot + stats.ready : null;
+  // "Needs your attention" = Hot leads only (the ones worth calling today).
+  // Warm/ready leads live under the Leads tab, not as an alarming Home count.
+  const attentionCount = stats ? stats.hot : null;
+
+  const dismissFlag = async (id: string) => {
+    setFlags((prev) => prev.filter((f) => f.id !== id)); // optimistic
+    await markNotificationRead(id);
+  };
   const suggestions = digest
     ? visibleSuggestions(digest, profile?.role ?? null, session?.user.id ?? null)
     : [];
@@ -178,6 +190,40 @@ export default function HomeScreen() {
               Kumusta? Here&apos;s where we are today — ask me anything or tap a shortcut below.
             </Text>
           </BayMoRow>
+
+          {/* Urgent flags — a lead personally needs the agent (e.g. requested a
+              call in the B2B campaign). BayMo messages the agent instead of email. */}
+          {flags.length > 0 && (
+            <View style={styles.flagRow}>
+              <Image source={baymoHead} style={rowStyles.avatar} contentFit="cover" />
+              <View style={styles.flagBubble}>
+                <Text style={styles.flagHeading}>🔔 Uy, kailangan mo itong tingnan!</Text>
+                {flags.map((f) => (
+                  <View key={f.id} style={styles.flagItem}>
+                    <Pressable
+                      style={{ flex: 1 }}
+                      onPress={() => {
+                        if (f.route) {
+                          markNotificationRead(f.id);
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          router.push(f.route as any);
+                        }
+                      }}>
+                      <Text style={styles.flagTitle}>{f.title}</Text>
+                      {f.body ? (
+                        <Text style={styles.flagBody} numberOfLines={2}>
+                          {f.body}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                    <Pressable onPress={() => dismissFlag(f.id)} hitSlop={8} style={styles.flagDone}>
+                      <Ionicons name="checkmark" size={16} color={BrandColors.successDeep} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Today's update */}
           {updateLine ? (
@@ -365,6 +411,38 @@ const styles = StyleSheet.create({
     color: BrandColors.successDeep,
   },
   feed: { padding: 20, paddingBottom: 12 },
+
+  // Urgent flag bubble (a lead needs the agent personally)
+  flagRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 12 },
+  flagBubble: {
+    flex: 1,
+    backgroundColor: BrandColors.coralSoft,
+    borderRadius: 20,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1.5,
+    borderColor: BrandColors.coral,
+    padding: 14,
+    gap: 8,
+  },
+  flagHeading: { ...TypeScale.bodyBold, color: BrandColors.coralDark },
+  flagItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: BrandColors.white,
+    borderRadius: 12,
+    padding: 10,
+  },
+  flagTitle: { ...TypeScale.bodyBold, color: BrandColors.ink },
+  flagBody: { ...TypeScale.bodySmall, color: BrandColors.textSecondary, marginTop: 1 },
+  flagDone: {
+    width: 30,
+    height: 30,
+    borderRadius: Radii.pill,
+    backgroundColor: BrandColors.successSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   greeting: { ...TypeScale.h3, color: BrandColors.ink },
   bodyText: { ...TypeScale.body, color: BrandColors.ink },

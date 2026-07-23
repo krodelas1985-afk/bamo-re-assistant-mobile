@@ -60,6 +60,41 @@ export async function fetchNotifications(): Promise<{ data: AppNotification[]; e
   };
 }
 
+/**
+ * High-priority notification types that mean "a lead needs the agent personally"
+ * — e.g. a B2B lead asked for a call, wants to reserve/buy, or an urgent issue the
+ * AI escalated. These are surfaced on Home as an urgent BayMo flag (not just in the
+ * Notification Center). Written server-side by the campaign responder's escalation
+ * path (replaces the old email-only alert).
+ */
+export const ATTENTION_TYPES = [
+  'lead_needs_attention',
+  'lead_call_request',
+  'lead_escalation',
+] as const;
+
+/** Unread, un-actioned attention flags for the Home "BayMo needs you" bubble. */
+export async function fetchAttentionFlags(limit = 5): Promise<AppNotification[]> {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id, type, title, body, data, read_at, created_at')
+    .in('type', ATTENTION_TYPES as unknown as string[])
+    .is('read_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  const rows = (data as Row[]) ?? [];
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    title: r.title,
+    body: r.body,
+    route: r.data?.route ?? null,
+    readAt: r.read_at,
+    createdAt: r.created_at,
+  }));
+}
+
 export async function fetchUnreadCount(): Promise<number> {
   const { count } = await supabase
     .from('notifications')
