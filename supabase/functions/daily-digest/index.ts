@@ -8,8 +8,10 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
  *                assigned_user_id, reason}] — only when automation is active.
  * For each suggestion it also creates a source='baymo' task_type='takeover'
  * task (due today, assigned to the lead's agent) unless one is already pending,
- * and drops an in-app 'daily_digest' notification per client member (push-
- * dispatch treats unknown types as in-app only, so no push policy needed yet).
+ * and drops a 'daily_digest' notification per client member. push-dispatch has a
+ * POLICY entry for that type (pref column daily_digest, quiet-respecting), and
+ * Manila quiet hours end at 06:00, so the 06:15 run pushes to the device rather
+ * than sitting unread in the Notification Center.
  *
  * When the client has NO active campaign, there are no suggestions/tasks; the
  * digest instead carries automation_active=false so the app can show

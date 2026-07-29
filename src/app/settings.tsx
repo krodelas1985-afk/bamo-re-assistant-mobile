@@ -29,7 +29,8 @@ const NOTIF_TOGGLES: { key: keyof NotificationPrefs; label: string; hint: string
   { key: 'appointment_reminders', label: 'Appointment reminders', hint: 'Viewings & calls, 24h and 1h before' },
   { key: 'tasks', label: 'Tasks', hint: 'When a task is assigned to you' },
   { key: 'ads_updates', label: 'Ads updates', hint: 'Campaign & report alerts' },
-  { key: 'quiet_hours', label: 'Quiet hours (9 PM–7 AM)', hint: 'Hold non-urgent pushes overnight — hot leads still come through' },
+  { key: 'daily_digest', label: 'Morning update', hint: 'Your 6:15 AM summary and what to do today' },
+  { key: 'quiet_hours', label: 'Quiet hours (9 PM–6 AM)', hint: 'Hold non-urgent pushes overnight — hot leads still come through' },
 ];
 
 const ROLE_LABELS: Record<string, string> = {

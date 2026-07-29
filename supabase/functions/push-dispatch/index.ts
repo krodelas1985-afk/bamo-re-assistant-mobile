@@ -1,10 +1,10 @@
 // push-dispatch — sends queued in-app notifications to devices via Expo Push.
 //
-// Invoked on a schedule (pg_cron → net.http_post, every minute) rather than per
-// insert, so the notifications-insert path stays trigger-light. Each run drains
-// notifications where pushed_at IS NULL, applies per-user preferences + Manila
-// quiet hours, sends through the Expo Push Service, stamps pushed_at, and prunes
-// tokens that Expo reports as DeviceNotRegistered.
+// Invoked on a schedule (pg_cron → net.http_post, every 2 minutes) rather than
+// per insert, so the notifications-insert path stays trigger-light. Each run
+// drains notifications where pushed_at IS NULL, applies per-user preferences +
+// Manila quiet hours, sends through the Expo Push Service, stamps pushed_at, and
+// prunes tokens that Expo reports as DeviceNotRegistered.
 //
 // The in-app row already exists regardless — this function only governs PUSH.
 //
@@ -21,6 +21,14 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const MANILA_TZ = 'Asia/Manila';
 
+// Quiet hours in Manila local time: [START, 24) ∪ [0, END).
+// END is 6, not 7, so the 6:15 AM daily digest clears the window and goes out
+// with the morning update instead of being held until 7. Anything else that
+// respects quiet hours also starts flowing an hour earlier — intended: 6 AM is
+// the start of the agent's day in this product.
+const QUIET_START_HOUR = 21;
+const QUIET_END_HOUR = 6;
+
 // Which types push at all, whether they respect quiet hours, the pref column
 // that gates them, and the Android channel to deliver on.
 const POLICY: Record<
@@ -35,14 +43,14 @@ const POLICY: Record<
   appointment_reminder_day: { pref: 'appointment_reminders', respectsQuiet: true,  channel: 'appointments', priority: 'high' },
   appointment_reminder_hour:{ pref: 'appointment_reminders', respectsQuiet: false, channel: 'appointments', priority: 'high' },
   task_assigned:            { pref: 'tasks',                 respectsQuiet: true,  channel: 'general',      priority: 'default' },
+  daily_digest:             { pref: 'daily_digest',          respectsQuiet: true,  channel: 'general',      priority: 'default' },
 };
 
 function inManilaQuietHours(now: Date): boolean {
-  // 21:00–06:59 PHT
   const hour = Number(
     new Intl.DateTimeFormat('en-US', { timeZone: MANILA_TZ, hour: '2-digit', hour12: false }).format(now),
   );
-  return hour >= 21 || hour < 7;
+  return hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR;
 }
 
 Deno.serve(async (req) => {
@@ -92,10 +100,13 @@ Deno.serve(async (req) => {
     const policy = POLICY[n.type];
     if (!policy) { pushedIds.push(n.id); continue; }               // unknown type → in-app only
 
-    // quiet-hours hold (in-app row already visible; just defer the push)
-    if (policy.respectsQuiet && quiet) { heldIds.push(n.id); continue; }
-
     const pref = prefs.get(n.user_id);
+
+    // quiet-hours hold (in-app row already visible; just defer the push).
+    // Honours the user's own quiet_hours toggle — default ON when unset.
+    const wantsQuiet = pref ? pref.quiet_hours !== false : true;
+    if (policy.respectsQuiet && quiet && wantsQuiet) { heldIds.push(n.id); continue; }
+
     // default ON when no pref row exists yet
     const enabled = policy.pref === null ? false : (pref ? pref[policy.pref] !== false : true);
     if (!enabled) { pushedIds.push(n.id); continue; }              // pref off / no-push type
