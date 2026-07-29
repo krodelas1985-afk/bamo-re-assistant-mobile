@@ -517,7 +517,7 @@ Deno.serve(async (req) => {
   if (!uid) return j({ error: 'Not authenticated' }, 401);
 
   // Service-role client; every read/write below is scoped by the caller's profile.
-  const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const admin = createClient(supabaseUrl, JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default']);
 
   const { data: profile } = await admin
     .from('profiles')

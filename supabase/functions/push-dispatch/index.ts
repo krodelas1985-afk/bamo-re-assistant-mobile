@@ -12,7 +12,9 @@
 // Auth: the caller (pg_cron via pg_net) presents x-dispatch-secret; we validate
 // it against a Vault-held secret through the check_push_dispatch_secret() RPC,
 // so no hand-set edge secret is required. Env SUPABASE_URL /
-// SUPABASE_SERVICE_ROLE_KEY are auto-injected by the platform.
+// SUPABASE_SECRET_KEYS are auto-injected by the platform. SUPABASE_SECRET_KEYS
+// is a JSON object keyed by key name, not a plain string like the legacy
+// SUPABASE_SERVICE_ROLE_KEY it replaces.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -46,7 +48,7 @@ function inManilaQuietHours(now: Date): boolean {
 Deno.serve(async (req) => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default'],
   );
 
   const secret = req.headers.get('x-dispatch-secret') ?? '';

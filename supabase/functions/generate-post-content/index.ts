@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
   const tone = payload.tone && TONES[payload.tone] ? payload.tone : 'friendly';
   const langInstruction = LANGUAGE_INSTRUCTIONS[payload.language ?? ''] ?? LANGUAGE_INSTRUCTIONS.english;
 
-  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default']);
 
   const { data: profile } = await admin
     .from('profiles')
