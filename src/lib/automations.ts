@@ -318,3 +318,100 @@ export async function submitFollowupRequest(
   });
   return { error: error ? error.message : null };
 }
+
+/* ------- Auto Follow-Up: per-campaign on/off (client-facing) -------
+ *
+ * The engine is one ai_adaptive sequence bound to a campaign, so follow-up is
+ * a per-campaign switch rather than a workspace-wide setting.
+ *
+ * Asymmetric on purpose: turning it ON files a request for the BaMo team, who
+ * set the touch ladder, goal and send window before anything sends. Turning it
+ * OFF applies immediately through a SECURITY DEFINER RPC — a client who wants
+ * automated messages to stop under their own name should not wait for a review.
+ */
+
+export type FollowupCampaignState = 'on' | 'off' | 'pending';
+
+export type FollowupCampaign = {
+  campaignId: string;
+  name: string;
+  state: FollowupCampaignState;
+  /** Admin's note on the most recent rejected request, if any. */
+  adminNotes: string | null;
+};
+
+export async function fetchFollowupCampaigns(): Promise<FollowupCampaign[]> {
+  // Active campaigns only: the enrol scan skips anything else, so offering a
+  // switch on a paused campaign would promise something that cannot happen.
+  const { data: campaigns, error } = await supabase
+    .from('campaigns')
+    .select('id, name')
+    .eq('status', 'active')
+    .order('name');
+  if (error || !campaigns?.length) return [];
+
+  const ids = campaigns.map((c) => c.id);
+
+  const [{ data: seqs }, { data: reqs }] = await Promise.all([
+    supabase
+      .from('sequences')
+      .select('campaign_id, is_active')
+      .eq('mode', 'ai_adaptive')
+      .in('campaign_id', ids),
+    supabase
+      .from('followup_requests')
+      .select('campaign_id, status, admin_notes, created_at')
+      .in('campaign_id', ids)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const activeByCampaign = new Map((seqs ?? []).map((s: any) => [s.campaign_id, !!s.is_active]));
+  const pending = new Set(
+    (reqs ?? []).filter((r: any) => r.status === 'pending').map((r: any) => r.campaign_id),
+  );
+  const latestNote = new Map<string, string | null>();
+  for (const r of reqs ?? []) {
+    if (!latestNote.has((r as any).campaign_id) && (r as any).status === 'rejected') {
+      latestNote.set((r as any).campaign_id, (r as any).admin_notes ?? null);
+    }
+  }
+
+  return campaigns.map((c) => ({
+    campaignId: c.id,
+    name: c.name,
+    state: activeByCampaign.get(c.id) ? 'on' : pending.has(c.id) ? 'pending' : 'off',
+    adminNotes: latestNote.get(c.id) ?? null,
+  }));
+}
+
+/** Ask the BaMo team to switch follow-up on for a campaign. */
+export async function requestFollowupEnable(
+  clientId: string,
+  userId: string,
+  campaignId: string,
+  notes?: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('followup_requests').insert({
+    client_id: clientId,
+    requested_by: userId,
+    campaign_id: campaignId,
+    action: 'enable',
+    notes: notes?.trim() || null,
+  });
+  // A unique index allows one pending request per campaign; a second tap is a
+  // no-op rather than an error the client has to understand.
+  if (error && /duplicate key/i.test(error.message)) return { error: null };
+  return { error: error ? error.message : null };
+}
+
+/** Switch follow-up off immediately. Applies within the next engine tick. */
+export async function disableFollowup(campaignId: string): Promise<{ error: string | null }> {
+  const { data, error } = await supabase.rpc('request_followup_disable', {
+    p_campaign_id: campaignId,
+  });
+  if (error) return { error: error.message };
+  if (data && (data as any).ok === false) {
+    return { error: (data as any).reason === 'forbidden' ? 'Not allowed for this campaign.' : 'Could not switch off.' };
+  }
+  return { error: null };
+}

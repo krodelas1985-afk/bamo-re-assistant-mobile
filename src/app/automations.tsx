@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import {
   Automation,
-  FollowupRequest,
+  FollowupCampaign,
   MAX_AUTOMATIONS,
-  fetchLatestFollowupRequest,
+  fetchFollowupCampaigns,
   fetchMyAutomations,
 } from '@/lib/automations';
 import { fetchMyFbPageId } from '@/lib/leads';
@@ -29,22 +29,27 @@ const STATUS_META: Record<
 export default function AutomationsScreen() {
   const router = useRouter();
   const [automations, setAutomations] = useState<Automation[]>([]);
-  const [followup, setFollowup] = useState<FollowupRequest | null>(null);
+  const [followupCampaigns, setFollowupCampaigns] = useState<FollowupCampaign[]>([]);
   const [fbPageId, setFbPageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      Promise.all([fetchMyAutomations(), fetchLatestFollowupRequest(), fetchMyFbPageId()]).then(
+      Promise.all([fetchMyAutomations(), fetchFollowupCampaigns(), fetchMyFbPageId()]).then(
         ([a, f, p]) => {
           setAutomations(a);
-          setFollowup(f);
+          setFollowupCampaigns(f);
           setFbPageId(p);
           setLoading(false);
         },
       );
     }, []),
   );
+
+  // Follow-up is per campaign now, so the card summarises rather than showing a
+  // single workspace-wide status (which would misreport a mixed set).
+  const followupOn = followupCampaigns.filter((c) => c.state === 'on').length;
+  const followupPending = followupCampaigns.filter((c) => c.state === 'pending').length;
 
   // 3-slot model: 1 General + up to 2 Property/Project automations.
   const openAutomations = automations.filter((a) => a.status !== 'completed');
@@ -151,25 +156,23 @@ export default function AutomationsScreen() {
               styles.iconWrap,
               {
                 backgroundColor:
-                  followup?.status === 'active'
-                    ? `${BrandColors.success}18`
-                    : `${BrandColors.orange}18`,
+                  followupOn > 0 ? `${BrandColors.success}18` : `${BrandColors.orange}18`,
               },
             ]}>
             <Ionicons
               name="repeat-outline"
               size={22}
-              color={followup?.status === 'active' ? BrandColors.success : BrandColors.orange}
+              color={followupOn > 0 ? BrandColors.success : BrandColors.orange}
             />
           </View>
           <View style={styles.cardText}>
             <Text style={styles.cardTitle}>Auto Follow-Up</Text>
             <Text style={styles.cardBody}>
-              {followup == null || followup.status === 'rejected'
-                ? 'Let BayMo follow up with leads who go quiet.'
-                : followup.status === 'active'
-                  ? 'On — BayMo follows up with quiet leads for you.'
-                  : 'Being set up by the BaMo team.'}
+              {followupOn > 0
+                ? `On for ${followupOn} of ${followupCampaigns.length} campaign${followupCampaigns.length === 1 ? '' : 's'}.`
+                : followupPending > 0
+                  ? 'Being set up by the BaMo team.'
+                  : 'Let BayMo follow up with leads who go quiet.'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={BrandColors.textMuted} />

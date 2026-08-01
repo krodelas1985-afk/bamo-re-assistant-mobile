@@ -1,75 +1,91 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/ui/button';
-import { TagPill } from '@/components/ui/tag-pill';
-import { TextField } from '@/components/ui/text-field';
 import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { useAuth } from '@/contexts/auth-context';
 import {
-  FOLLOWUP_DURATIONS,
-  FOLLOWUP_STYLES,
-  FollowupRequest,
-  FollowupStyle,
-  fetchLatestFollowupRequest,
-  submitFollowupRequest,
+  FollowupCampaign,
+  disableFollowup,
+  fetchFollowupCampaigns,
+  requestFollowupEnable,
 } from '@/lib/automations';
 
+/**
+ * Auto Follow-Up, per campaign.
+ *
+ * Switching ON files a request: the BaMo team sets the touch schedule, goal and
+ * sending hours before anything goes out, so the row reads "Being set up" until
+ * it is actually live. Switching OFF applies immediately — a client wanting
+ * automated messages stopped under their own name should not wait for a review.
+ */
 export default function FollowupSetupScreen() {
   const router = useRouter();
   const { profile, session } = useAuth();
   const clientId = profile?.client_id ?? null;
   const userId = session?.user.id ?? null;
 
-  const [existing, setExisting] = useState<FollowupRequest | null>(null);
+  const [campaigns, setCampaigns] = useState<FollowupCampaign[]>([]);
   const [loading, setLoading] = useState(true);
-  const [style, setStyle] = useState<FollowupStyle>('standard');
-  const [duration, setDuration] = useState<number>(14);
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchLatestFollowupRequest().then((r) => {
-      setExisting(r);
-      setLoading(false);
-    });
-  }, []);
+  // useFocusEffect rather than useEffect: coming back to this screen after the
+  // BaMo team switches a campaign on should show the new state, not a stale one.
+  useFocusEffect(
+    useCallback(() => {
+      fetchFollowupCampaigns().then((rows) => {
+        setCampaigns(rows);
+        setLoading(false);
+      });
+    }, []),
+  );
 
-  const submit = async () => {
+  const onToggle = async (c: FollowupCampaign, next: boolean) => {
     if (!clientId || !userId) {
       Alert.alert('Not ready', 'Your workspace is still being set up. Please try again shortly.');
       return;
     }
-    setSaving(true);
-    const { error } = await submitFollowupRequest(clientId, userId, {
-      style,
-      durationDays: duration,
-      notes,
-    });
-    setSaving(false);
-    if (error) {
-      Alert.alert('Could not submit', error);
+    setBusyId(c.campaignId);
+
+    if (next) {
+      const { error } = await requestFollowupEnable(clientId, userId, c.campaignId);
+      setBusyId(null);
+      if (error) {
+        Alert.alert('Could not send request', error);
+        return;
+      }
+      // It is a request, not a switch — show "being set up" rather than "on".
+      setCampaigns((prev) =>
+        prev.map((x) => (x.campaignId === c.campaignId ? { ...x, state: 'pending' } : x)),
+      );
+      Alert.alert(
+        'Request sent',
+        'The BaMo team will set up the follow-up schedule for this campaign and switch it on. You’ll see it here once it’s live.',
+      );
       return;
     }
-    Alert.alert(
-      'Request sent 🎉',
-      'The BaMo team will program BayMo’s follow-up plan and switch it on — you’ll get a notification once it’s active.',
-      [{ text: 'Done', onPress: () => router.back() }],
+
+    const { error } = await disableFollowup(c.campaignId);
+    setBusyId(null);
+    if (error) {
+      Alert.alert('Could not switch off', error);
+      return;
+    }
+    setCampaigns((prev) =>
+      prev.map((x) => (x.campaignId === c.campaignId ? { ...x, state: 'off' } : x)),
     );
   };
-
-  const showForm = !loading && (!existing || existing.status === 'rejected');
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -83,110 +99,66 @@ export default function FollowupSetupScreen() {
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.lede}>
-          Most leads go quiet before they buy. Turn this on and BayMo follows up with them for you
-          — and stops the moment they reply, so it never talks over you.
+          When a lead goes quiet, BayMo follows up for you — and steps back the moment they reply.
+          Choose which campaigns it should work on.
         </Text>
 
-        {loading ? (
-          <ActivityIndicator color={BrandColors.navy} style={{ marginVertical: 24 }} />
-        ) : existing && existing.status !== 'rejected' ? (
-          <View
-            style={[
-              styles.statusCard,
-              {
-                borderColor:
-                  existing.status === 'active' ? BrandColors.success : BrandColors.orange,
-              },
-            ]}>
-            <Ionicons
-              name={existing.status === 'active' ? 'checkmark-circle' : 'time-outline'}
-              size={28}
-              color={existing.status === 'active' ? BrandColors.success : BrandColors.orange}
-            />
-            <Text style={styles.statusTitle}>
-              {existing.status === 'active'
-                ? 'Auto Follow-Up is on'
-                : 'The BaMo team is setting this up'}
-            </Text>
-            <Text style={styles.statusBody}>
-              {FOLLOWUP_STYLES.find((s) => s.key === existing.style)?.label ?? existing.style} ·{' '}
-              {existing.durationDays} days
-            </Text>
-            {!!existing.adminNotes && <Text style={styles.statusBody}>{existing.adminNotes}</Text>}
-          </View>
-        ) : null}
+        {loading && <ActivityIndicator color={BrandColors.navy} style={{ marginVertical: 24 }} />}
 
-        {existing?.status === 'rejected' && (
-          <View style={[styles.statusCard, { borderColor: BrandColors.error }]}>
-            <Text style={styles.statusTitle}>Previous request needs attention</Text>
-            {!!existing.adminNotes && <Text style={styles.statusBody}>{existing.adminNotes}</Text>}
-            <Text style={styles.statusBody}>You can send a new request below.</Text>
+        {!loading && campaigns.length === 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>No active campaigns yet</Text>
+            <Text style={styles.cardBody}>
+              Once a campaign is running, you can switch follow-up on for it here.
+            </Text>
           </View>
         )}
 
-        {showForm && (
-          <>
-            <Text style={styles.section}>How persistent should BayMo be?</Text>
-            {FOLLOWUP_STYLES.map((s) => {
-              const active = style === s.key;
-              return (
-                <Pressable
-                  key={s.key}
-                  style={[styles.choice, active && styles.choiceActive]}
-                  onPress={() => setStyle(s.key)}>
-                  <View style={styles.choiceText}>
-                    <Text style={[styles.choiceTitle, active && { color: BrandColors.navy }]}>
-                      {s.label}
-                    </Text>
-                    <Text style={styles.choiceBody}>{s.description}</Text>
-                  </View>
-                  <Ionicons
-                    name={active ? 'radio-button-on' : 'radio-button-off'}
-                    size={22}
-                    color={active ? BrandColors.navy : BrandColors.textMuted}
+        {!loading &&
+          campaigns.map((c) => (
+            <View key={c.campaignId} style={styles.card}>
+              <View style={styles.cardRow}>
+                <View style={styles.cardText}>
+                  <Text style={styles.cardTitle}>{c.name}</Text>
+                  <Text
+                    style={[
+                      styles.statusLine,
+                      c.state === 'on' && { color: BrandColors.successDeep },
+                      c.state === 'pending' && { color: BrandColors.orangeDark },
+                    ]}
+                  >
+                    {c.state === 'on'
+                      ? 'On — following up with quiet leads'
+                      : c.state === 'pending'
+                        ? 'Being set up by the BaMo team'
+                        : 'Off'}
+                  </Text>
+                  {!!c.adminNotes && c.state === 'off' && (
+                    <Text style={styles.noteLine}>{c.adminNotes}</Text>
+                  )}
+                </View>
+
+                {busyId === c.campaignId ? (
+                  <ActivityIndicator color={BrandColors.navy} />
+                ) : (
+                  <Switch
+                    value={c.state !== 'off'}
+                    onValueChange={(v) => onToggle(c, v)}
+                    disabled={c.state === 'pending'}
+                    trackColor={{ true: BrandColors.navy, false: BrandColors.border }}
                   />
-                </Pressable>
-              );
-            })}
-
-            <Text style={styles.section}>For how long?</Text>
-            <View style={styles.pillRow}>
-              {FOLLOWUP_DURATIONS.map((d) => (
-                <TagPill
-                  key={d}
-                  label={`${d} days`}
-                  active={duration === d}
-                  onPress={() => setDuration(d)}
-                />
-              ))}
+                )}
+              </View>
             </View>
+          ))}
 
-            <TextField
-              label="Anything BayMo should know? (optional)"
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="e.g. Don’t follow up with leads who already booked a viewing"
-              multiline
-              numberOfLines={3}
-            />
-
-            <Text style={styles.hint}>
-              BayMo never messages during late-night quiet hours, and always stops when a lead
-              replies or asks to stop.
-            </Text>
-          </>
+        {!loading && campaigns.length > 0 && (
+          <Text style={styles.footnote}>
+            Switching off takes effect right away. Switching on needs a quick set-up by the BaMo
+            team so the timing and message style suit your campaign.
+          </Text>
         )}
       </ScrollView>
-
-      {showForm && (
-        <View style={styles.footer}>
-          <Button
-            label={saving ? 'Sending…' : 'Turn on Auto Follow-Up'}
-            onPress={submit}
-            style={{ width: '100%' }}
-          />
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -205,40 +177,25 @@ const styles = StyleSheet.create({
   },
   headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
   content: { padding: 16, gap: 10, paddingBottom: 32 },
-  lede: { ...TypeScale.body, color: BrandColors.textSecondary },
-  section: { ...TypeScale.h4, color: BrandColors.textHeading, marginTop: 8 },
-  hint: { ...TypeScale.bodySmall, color: BrandColors.textMuted, marginTop: 4 },
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  choice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  lede: { ...TypeScale.body, color: BrandColors.textSecondary, marginBottom: 4 },
+  card: {
     backgroundColor: BrandColors.white,
-    borderWidth: 1.5,
+    borderRadius: Radii.card,
+    borderWidth: 1,
     borderColor: BrandColors.border,
-    borderRadius: Radii.card,
-    padding: 14,
-  },
-  choiceActive: { borderColor: BrandColors.navy },
-  choiceText: { flex: 1, gap: 2 },
-  choiceTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
-  choiceBody: { ...TypeScale.bodySmall, color: BrandColors.textSecondary },
-  statusCard: {
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: BrandColors.white,
+    padding: 16,
     ...CardShadow,
-    borderWidth: 1.5,
-    borderRadius: Radii.card,
-    padding: 16,
-    marginVertical: 6,
   },
-  statusTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
-  statusBody: { ...TypeScale.bodySmall, color: BrandColors.textSecondary, textAlign: 'center' },
-  footer: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: BrandColors.border,
-    backgroundColor: BrandColors.white,
+  cardRow: { flexDirection: 'row', alignItems: 'center' },
+  cardText: { flex: 1, paddingRight: 12 },
+  cardTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
+  cardBody: { ...TypeScale.bodySmall, color: BrandColors.textSecondary, marginTop: 4 },
+  statusLine: { ...TypeScale.bodySmall, color: BrandColors.textMuted, marginTop: 4 },
+  noteLine: {
+    ...TypeScale.bodySmall,
+    color: BrandColors.textMuted,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
+  footnote: { ...TypeScale.bodySmall, color: BrandColors.textMuted, marginTop: 8 },
 });
