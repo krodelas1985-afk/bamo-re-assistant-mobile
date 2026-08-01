@@ -16,6 +16,7 @@ import {
   NotificationPrefs,
   savePreferences,
 } from '@/lib/notifications';
+import { getLastPushDiagnostic, PushDiagnostic, registerForPushNotifications } from '@/lib/push';
 import {
   changePassword,
   fetchWorkspaceName,
@@ -32,6 +33,16 @@ const NOTIF_TOGGLES: { key: keyof NotificationPrefs; label: string; hint: string
   { key: 'daily_digest', label: 'Morning update', hint: 'Your 6:15 AM summary and what to do today' },
   { key: 'quiet_hours', label: 'Quiet hours (9 PM–6 AM)', hint: 'Hold non-urgent pushes overnight — hot leads still come through' },
 ];
+
+const PUSH_STAGE_LABELS: Record<PushDiagnostic['stage'], string> = {
+  registered: 'This device is set up for push',
+  not_a_device: 'Push needs a real phone',
+  permission_denied: 'Notifications are turned off for BaMo',
+  no_project_id: 'App build is missing its push config',
+  fcm_token_failed: "Google's push service didn't respond",
+  expo_token_failed: 'Push service could not issue a token',
+  db_write_failed: "Couldn't save this device",
+};
 
 const ROLE_LABELS: Record<string, string> = {
   baymo_admin: 'BaMo Admin',
@@ -56,9 +67,23 @@ export default function SettingsScreen() {
 
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
 
+  const [pushDiag, setPushDiag] = useState<PushDiagnostic | null>(null);
+  const [retryingPush, setRetryingPush] = useState(false);
+
   useEffect(() => {
     if (clientId) fetchWorkspaceName().then(setWorkspace);
   }, [clientId]);
+
+  useEffect(() => {
+    getLastPushDiagnostic().then(setPushDiag);
+  }, []);
+
+  const retryPushRegistration = async () => {
+    if (!userId) return;
+    setRetryingPush(true);
+    setPushDiag(await registerForPushNotifications(userId));
+    setRetryingPush(false);
+  };
 
   useEffect(() => {
     fetchPreferences().then(setPrefs);
@@ -181,6 +206,36 @@ export default function SettingsScreen() {
         <Text style={styles.muted}>
           Also allow notifications for BaMo in your phone&apos;s settings to receive pushes.
         </Text>
+
+        {/* Delivery status — the toggles above only matter if this device is registered. */}
+        <View style={styles.pushPanel}>
+          <View style={styles.rowStart}>
+            <View
+              style={[
+                styles.pushDot,
+                {
+                  backgroundColor:
+                    pushDiag?.stage === 'registered' ? BrandColors.success : BrandColors.orange,
+                },
+              ]}
+            />
+            <Text style={styles.pushStatus}>
+              {pushDiag ? PUSH_STAGE_LABELS[pushDiag.stage] : 'Push status not checked yet'}
+            </Text>
+          </View>
+
+          {pushDiag && pushDiag.stage !== 'registered' ? (
+            <Text style={styles.pushDetail}>{pushDiag.detail}</Text>
+          ) : null}
+
+          {retryingPush ? (
+            <ActivityIndicator color={BrandColors.navy} />
+          ) : userId ? (
+            <Button label="Check push setup" variant="secondary" onPress={retryPushRegistration} />
+          ) : (
+            <Text style={styles.pushDetail}>Sign in to check push setup.</Text>
+          )}
+        </View>
       </View>
 
       {/* Support */}
@@ -283,6 +338,17 @@ const styles = StyleSheet.create({
     ...TypeScale.bodySmall,
     color: BrandColors.textBody,
   },
+  pushPanel: {
+    gap: 8,
+    padding: 12,
+    borderRadius: Radii.chip,
+    borderWidth: 1,
+    borderColor: BrandColors.border,
+    backgroundColor: BrandColors.cream100,
+  },
+  pushDot: { width: 8, height: 8, borderRadius: 4 },
+  pushStatus: { ...TypeScale.bodySmall, color: BrandColors.textBody, flexShrink: 1 },
+  pushDetail: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
