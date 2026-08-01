@@ -45,3 +45,6 @@ example
 
 # local dev logs
 metro.log
+
+# Supabase CLI scratch state
+supabase/.temp/
