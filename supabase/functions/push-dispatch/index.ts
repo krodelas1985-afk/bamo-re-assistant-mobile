@@ -134,17 +134,35 @@ Deno.serve(async (req) => {
         body: JSON.stringify(chunk),
       });
       const json = await res.json();
+      if (json?.errors) {
+        console.error('[push-dispatch] Expo rejected the request:', JSON.stringify(json.errors));
+      }
       const tickets = json?.data ?? [];
       for (let k = 0; k < tickets.length; k++) {
         const ticket = tickets[k];
-        if (ticket?.status === 'ok') { sent++; continue; }
+        if (ticket?.status === 'ok') {
+          sent++;
+          // A ticket is an ACCEPTANCE, not a delivery. Real failures
+          // (MismatchSenderId, InvalidCredentials, MessageTooBig) only surface
+          // in the receipt at /push/getReceipts, which nothing polls yet — so
+          // keep the id where an operator can find it.
+          if (ticket.id) console.log(`[push-dispatch] ticket ${ticket.id} accepted`);
+          continue;
+        }
+        // Anything not ok was previously discarded unless it was
+        // DeviceNotRegistered, which is how 209 sends produced no signal.
+        console.error(
+          `[push-dispatch] ticket not ok: status=${ticket?.status} error=${ticket?.details?.error ?? 'none'} message=${ticket?.message ?? 'none'}`,
+        );
         if (ticket?.details?.error === 'DeviceNotRegistered') {
           await supabase.from('push_tokens').delete().eq('expo_push_token', chunk[k].to);
         }
       }
-    } catch (_e) {
+    } catch (e) {
       // network hiccup — leave those notifs stamped; next event re-engages. Do
-      // not block the batch.
+      // not block the batch. Still say so: a persistently unreachable Expo
+      // looked identical to "nothing to send" before.
+      console.error('[push-dispatch] send chunk failed:', e instanceof Error ? e.message : String(e));
     }
   }
 
