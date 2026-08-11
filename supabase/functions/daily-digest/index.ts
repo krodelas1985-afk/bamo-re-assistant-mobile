@@ -22,6 +22,17 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
  * that has ever landed — and only for people who open the app. Email is what
  * actually gets read; see the W9 lead-alert emailer for the precedent.
  *
+ * Email send policy (2026-08-12), designed so a quiet client costs nothing:
+ *   - dormant (no new lead, no inbound reply, no BaMo message in the 5 Manila
+ *     days ending on the digest day) → no email at all. Derived from a rolling
+ *     window, NOT a stored flag, so the morning a lead arrives — new or
+ *     returning — the window refills and email resumes by itself.
+ *   - automation ON  → the morning update, on days there is news.
+ *   - automation OFF → the "BaMo is off" nudge carrying yesterday's numbers and
+ *     the Hot leads sitting unanswered, sent ONLY on days leads actually came in
+ *     or replied. Never on a quiet day: the nudge should always point at
+ *     something concrete rather than become a daily drumbeat.
+ *
  * Auth: pg_cron (via pg_net) sends x-digest-secret, validated against the same
  * Vault secret push-dispatch uses (check_push_dispatch_secret RPC) — the caller
  * is the same trusted cron. verify_jwt=false; nothing runs without the secret.
@@ -87,15 +98,31 @@ function prettyDate(d: string): string {
   });
 }
 
+type HotLead = { lead_id: string; name: string; temperature: string };
+type Totals = { hot: number; warm: number };
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 /**
- * The email carries the same numbers as the in-app card plus the full takeover
- * list — the app filters suggestions per agent, but this goes to the client's
- * admins, who see the whole workspace anyway.
+ * Two shapes of email:
+ *
+ * - automation ON  → the morning update: yesterday's numbers + the takeover list.
+ *   (The app filters suggestions per agent; this goes to the client's admins,
+ *   who see the whole workspace anyway.)
+ * - automation OFF → the nudge: BaMo is off, here is what came in anyway, and
+ *   here are the Hot leads sitting unanswered. Sent only on days leads actually
+ *   arrived, so it always has something concrete to point at.
  */
-function renderDigestEmail(activityDate: string, m: Metrics, suggestions: Suggestion[]) {
+function renderDigestEmail(
+  activityDate: string,
+  m: Metrics,
+  suggestions: Suggestion[],
+  hot: HotLead[],
+  totals: Totals,
+) {
   const subject = m.automation_active
-    ? `Your BaMo morning update — ${m.new_leads} new lead${m.new_leads === 1 ? '' : 's'}, ${m.turned_hot} turned Hot`
-    : `Your BaMo morning update — ${m.new_leads} new lead${m.new_leads === 1 ? '' : 's'}, automation is off`;
+    ? `Your BaMo morning update — ${plural(m.new_leads, 'new lead')}, ${m.turned_hot} turned Hot`
+    : `BaMo is off — ${plural(m.new_leads, 'new lead')} yesterday, ${plural(totals.hot, 'Hot lead')} waiting`;
 
   const stat = (label: string, value: string | number, color: string) => `
     <td style="padding:12px 8px;text-align:center;">
@@ -103,34 +130,60 @@ function renderDigestEmail(activityDate: string, m: Metrics, suggestions: Sugges
       <div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#5B5B5B;line-height:18px;">${label}</div>
     </td>`;
 
-  const rows = suggestions
-    .map(
-      (s) => `
+  const leadRow = (id: string, name: string, temperature: string, sub: string) => `
       <tr>
         <td style="padding:12px 16px;border-top:1px solid #E5E7EB;font-family:Poppins,Arial,sans-serif;font-size:14px;color:#3A3A3A;">
-          <strong>${esc(s.name)}</strong>
-          <span style="color:${s.temperature === 'Hot' ? '#E74C3C' : '#E67E22'};font-size:12px;">&nbsp;${esc(s.temperature)}</span>
-          <div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#5B5B5B;line-height:18px;">${esc(s.reason)}</div>
+          <strong>${esc(name)}</strong>
+          <span style="color:${temperature === 'Hot' ? '#E74C3C' : '#E67E22'};font-size:12px;">&nbsp;${esc(temperature)}</span>
+          <div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#5B5B5B;line-height:18px;">${esc(sub)}</div>
         </td>
         <td style="padding:12px 16px;border-top:1px solid #E5E7EB;text-align:right;white-space:nowrap;">
-          <a href="${CRM_BASE}/leads/${s.lead_id}" style="font-family:Poppins,Arial,sans-serif;font-size:13px;font-weight:600;color:#1F3C88;text-decoration:none;">Open lead &rarr;</a>
+          <a href="${CRM_BASE}/leads/${id}" style="font-family:Poppins,Arial,sans-serif;font-size:13px;font-weight:600;color:#1F3C88;text-decoration:none;">Open lead &rarr;</a>
         </td>
-      </tr>`,
-    )
-    .join('');
+      </tr>`;
+
+  const section = (heading: string, rowsHtml: string, note = '') =>
+    rowsHtml
+      ? `<tr><td style="padding:16px 24px 0;">
+           <div style="font-family:Poppins,Arial,sans-serif;font-size:16px;font-weight:600;color:#3A3A3A;line-height:22px;">${heading}</div>
+           ${note ? `<div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#5B5B5B;line-height:18px;">${note}</div>` : ''}
+         </td></tr>
+         <tr><td style="padding:4px 8px 0;">
+           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rowsHtml}</table>
+         </td></tr>`
+      : '';
+
+  const body = m.automation_active
+    ? section(
+        'Needs you today',
+        suggestions.map((s) => leadRow(s.lead_id, s.name, s.temperature, s.reason)).join(''),
+      )
+    : section(
+        'Hot leads waiting for an answer',
+        hot.map((h) => leadRow(h.lead_id, h.name, h.temperature, 'Asked a question and never got a reply')).join(''),
+        totals.hot > hot.length ? `Showing ${hot.length} of ${totals.hot}.` : '',
+      );
+
+  const cta = m.automation_active
+    ? ''
+    : `<tr><td style="padding:20px 24px 0;" align="center">
+         <a href="${CRM_BASE}/campaigns" style="display:inline-block;background:#E67E22;color:#FFFFFF;font-family:Poppins,Arial,sans-serif;font-size:16px;font-weight:600;line-height:24px;padding:12px 28px;border-radius:8px;text-decoration:none;">Turn BaMo on</a>
+       </td></tr>`;
 
   const closing = m.automation_active
     ? suggestions.length
       ? `<p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#5B5B5B;line-height:20px;">These leads replied and are waiting to hear from a person. BaMo has kept them warm — the handover is yours.</p>`
       : `<p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#5B5B5B;line-height:20px;">Nothing needs your hands today. BaMo is handling the follow-ups.</p>`
-    : `<p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#5B5B5B;line-height:20px;"><strong style="color:#E67E22;">BaMo automation is off.</strong> Activate a campaign and BaMo will answer and follow up on these leads for you.</p>`;
+    : `<p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#5B5B5B;line-height:20px;"><strong style="color:#E67E22;">BaMo is off right now.</strong> Turning it on means every inquiry gets answered in seconds — day or night — and you only step in when a lead is ready for you.${totals.warm ? ` You also have ${plural(totals.warm, 'Warm lead')} that could be worked.` : ''}</p>`;
 
   const html = `<!doctype html><html><body style="margin:0;padding:0;background:#FFF7ED;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF7ED;padding:24px 12px;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #EBE1CF;">
         <tr><td style="background:#1F3C88;padding:20px 24px;">
-          <div style="font-family:Poppins,Arial,sans-serif;font-size:18px;font-weight:600;color:#FFFFFF;line-height:24px;">Your BaMo morning update &#9728;</div>
+          <div style="font-family:Poppins,Arial,sans-serif;font-size:18px;font-weight:600;color:#FFFFFF;line-height:24px;">${
+            m.automation_active ? 'Your BaMo morning update &#9728;' : 'BaMo is off &mdash; here is what you missed'
+          }</div>
           <div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#F3C098;line-height:18px;">What happened on ${prettyDate(activityDate)}</div>
         </td></tr>
         <tr><td style="padding:8px 8px 0;">
@@ -141,17 +194,10 @@ function renderDigestEmail(activityDate: string, m: Metrics, suggestions: Sugges
             ${stat('Turned Hot', m.turned_hot, '#E74C3C')}
           </tr></table>
         </td></tr>
-        ${
-          suggestions.length
-            ? `<tr><td style="padding:16px 24px 0;">
-                 <div style="font-family:Poppins,Arial,sans-serif;font-size:16px;font-weight:600;color:#3A3A3A;line-height:22px;">Needs you today</div>
-               </td></tr>
-               <tr><td style="padding:4px 8px 0;">
-                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
-               </td></tr>`
-            : ''
-        }
-        <tr><td style="padding:20px 24px 24px;">${closing}</td></tr>
+        ${body}
+        <tr><td style="padding:20px 24px ${m.automation_active ? '24px' : '4px'};">${closing}</td></tr>
+        ${cta}
+        ${m.automation_active ? '' : '<tr><td style="height:24px;"></td></tr>'}
         <tr><td style="background:#FFFDF8;padding:14px 24px;border-top:1px solid #EBE1CF;">
           <div style="font-family:Inter,Arial,sans-serif;font-size:11px;color:#9CA3AF;line-height:16px;">BaMo &middot; Real Estate Made Simple &middot; <a href="${CRM_BASE}" style="color:#1F3C88;text-decoration:none;">Open BaMo</a></div>
         </td></tr>
@@ -160,23 +206,37 @@ function renderDigestEmail(activityDate: string, m: Metrics, suggestions: Sugges
   </table></body></html>`;
 
   const text = [
-    `Your BaMo morning update — ${prettyDate(activityDate)}`,
+    m.automation_active
+      ? `Your BaMo morning update — ${prettyDate(activityDate)}`
+      : `BaMo is off — here is what you missed on ${prettyDate(activityDate)}`,
     '',
     `New leads: ${m.new_leads}`,
     `BaMo handled: ${m.baymo_handled}`,
     `Turned Warm: ${m.turned_warm}`,
     `Turned Hot: ${m.turned_hot}`,
     '',
-    ...(suggestions.length
-      ? [
-          'Needs you today:',
-          ...suggestions.map((s) => `- ${s.name} (${s.temperature}) — ${s.reason}\n  ${CRM_BASE}/leads/${s.lead_id}`),
+    ...(m.automation_active
+      ? suggestions.length
+        ? [
+            'Needs you today:',
+            ...suggestions.map((s) => `- ${s.name} (${s.temperature}) — ${s.reason}\n  ${CRM_BASE}/leads/${s.lead_id}`),
+            '',
+            'BaMo is handling the follow-ups.',
+          ]
+        : ['BaMo is handling the follow-ups.']
+      : [
+          ...(hot.length
+            ? [
+                `Hot leads waiting for an answer${totals.hot > hot.length ? ` (showing ${hot.length} of ${totals.hot})` : ''}:`,
+                ...hot.map((h) => `- ${h.name} (${h.temperature})\n  ${CRM_BASE}/leads/${h.lead_id}`),
+                '',
+              ]
+            : []),
+          'BaMo is off right now. Turning it on means every inquiry gets answered in seconds — day or night — and you only step in when a lead is ready for you.',
+          ...(totals.warm ? [`You also have ${plural(totals.warm, 'Warm lead')} that could be worked.`] : []),
           '',
-        ]
-      : []),
-    m.automation_active
-      ? 'BaMo is handling the follow-ups.'
-      : 'BaMo automation is off. Activate a campaign and BaMo will answer and follow up for you.',
+          `Turn BaMo on: ${CRM_BASE}/campaigns`,
+        ]),
   ].join('\n');
 
   return { subject, html, text };
@@ -193,6 +253,8 @@ async function emailDigest(
   activityDate: string,
   metrics: Metrics,
   suggestions: Suggestion[],
+  hot: HotLead[],
+  totals: Totals,
 ): Promise<string> {
   const apiKey = Deno.env.get('RESEND_API_KEY');
   if (!apiKey) return 'skipped:no_key';
@@ -201,7 +263,7 @@ async function emailDigest(
   const to = ((recipients as string[] | null) ?? []).filter(Boolean);
   if (!to.length) return 'skipped:no_recipient';
 
-  const { subject, html, text } = renderDigestEmail(activityDate, metrics, suggestions);
+  const { subject, html, text } = renderDigestEmail(activityDate, metrics, suggestions, hot, totals);
 
   const { data: claim, error: claimErr } = await db
     .from('daily_digest_emails')
@@ -303,19 +365,86 @@ async function digestForClient(
       }));
   }
 
-  // Something worth saying at all — gates both the in-app notification and the
-  // email, so quiet clients don't get a daily "nothing happened".
+  // Something worth saying at all — gates the in-app notification, so quiet
+  // clients don't get a daily "nothing happened".
   const hasNews = metrics.new_leads > 0 || metrics.baymo_handled > 0 || suggestions.length > 0;
+
+  // When BaMo is off the email becomes a nudge, so it needs the leads that are
+  // sitting unanswered — the takeover list above is only built while automation
+  // is live. Hot first because that is what the nudge points at.
+  let hot: HotLead[] = [];
+  let totals: Totals = { hot: 0, warm: 0 };
+  if (!automationActive) {
+    const [hotRes, hotCount, warmCount] = await Promise.all([
+      db.from('leads').select('id, name, lead_temperature')
+        .eq('client_id', clientId).eq('lead_temperature', 'Hot')
+        .order('last_inbound_at', { ascending: false, nullsFirst: false }).limit(5),
+      db.from('leads').select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId).eq('lead_temperature', 'Hot'),
+      db.from('leads').select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId).eq('lead_temperature', 'Warm'),
+    ]);
+    hot = ((hotRes.data as Record<string, string | null>[]) ?? []).map((l) => ({
+      lead_id: l.id!,
+      name: l.name ?? 'Lead',
+      temperature: l.lead_temperature ?? 'Hot',
+    }));
+    totals = { hot: hotCount.count ?? 0, warm: warmCount.count ?? 0 };
+  }
+
+  // Dormancy, derived rather than stored. A client is dormant when NOTHING
+  // happened in the 5 Manila days ending on the digest day — no new lead, no
+  // inbound reply from an existing lead, no BaMo message. Dormant clients get no
+  // email, and because this is a rolling window rather than a flag, the morning
+  // a lead arrives the window refills and the email resumes on its own. There is
+  // no dormant state that can get stuck off.
+  const windowStart = new Date(new Date(start).getTime() - 4 * 864e5).toISOString();
+  const [wLeads, wInbound, wAi, yInbound] = await Promise.all([
+    db.from('leads').select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId).gte('created_at', windowStart).lt('created_at', end),
+    db.from('conversations').select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId).eq('direction', 'inbound')
+      .gte('created_at', windowStart).lt('created_at', end),
+    db.from('conversations').select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId).gte('created_at', windowStart).lt('created_at', end)
+      .or('sender.in.(ai,sequence,system),sent_via.eq.baymo'),
+    db.from('conversations').select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId).eq('direction', 'inbound')
+      .gte('created_at', start).lt('created_at', end),
+  ]);
+  const activeInWindow =
+    (wLeads.count ?? 0) > 0 || (wInbound.count ?? 0) > 0 || (wAi.count ?? 0) > 0;
+
+  // Leads actually arrived or replied yesterday. This is what the "BaMo is off"
+  // nudge fires on — never on a quiet day, so it always has something concrete
+  // to point at instead of becoming a daily drumbeat.
+  const leadsCameIn = metrics.new_leads > 0 || (yInbound.count ?? 0) > 0;
+
+  const emailReason = !activeInWindow
+    ? 'skipped:dormant'
+    : automationActive
+      ? hasNews ? '' : 'skipped:no_news'
+      : leadsCameIn ? '' : 'skipped:no_new_leads';
 
   if (dryRun) {
     const { data: recipients } = await db.rpc('digest_email_recipients', { p_client_id: clientId });
-    const { subject, html, text } = renderDigestEmail(activityDate, metrics, suggestions);
+    const { subject, html, text } = renderDigestEmail(activityDate, metrics, suggestions, hot, totals);
     return {
       client_id: clientId,
       metrics,
       suggestions,
       dry_run: true,
-      email: { would_send: hasNews, to: recipients ?? [], subject, html, text },
+      email: {
+        would_send: emailReason === '',
+        reason: emailReason || 'send',
+        active_in_window: activeInWindow,
+        leads_came_in: leadsCameIn,
+        totals,
+        to: recipients ?? [],
+        subject,
+        html,
+        text,
+      },
     };
   }
 
@@ -380,9 +509,9 @@ async function digestForClient(
   // Email the same digest to the client's admins — the channel that actually
   // lands. Deliberately after the digest/tasks/notification writes so nothing
   // above depends on Resend being reachable.
-  const emailed = hasNews
-    ? await emailDigest(db, clientId, activityDate, metrics, suggestions)
-    : 'skipped:no_news';
+  const emailed = emailReason === ''
+    ? await emailDigest(db, clientId, activityDate, metrics, suggestions, hot, totals)
+    : emailReason;
 
   return {
     client_id: clientId,
