@@ -17,10 +17,17 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
  * digest instead carries automation_active=false so the app can show
  * "BaMo automation is off — activate a campaign" (per Kathy, 2026-07-11).
  *
+ * The same digest is ALSO emailed to the client's admins (2026-08-12). Push has
+ * never reached a handset here, so the in-app notification is the only channel
+ * that has ever landed — and only for people who open the app. Email is what
+ * actually gets read; see the W9 lead-alert emailer for the precedent.
+ *
  * Auth: pg_cron (via pg_net) sends x-digest-secret, validated against the same
  * Vault secret push-dispatch uses (check_push_dispatch_secret RPC) — the caller
  * is the same trusted cron. verify_jwt=false; nothing runs without the secret.
  * Manual test runs may POST { date?: 'YYYY-MM-DD', client_id?: uuid, dry_run?: true }.
+ * A dry run sends nothing and returns the rendered subject + resolved recipients
+ * so the template can be proven before it reaches a real inbox.
  */
 
 const cors = {
@@ -50,6 +57,189 @@ type Suggestion = {
   assigned_user_id: string | null;
   reason: string;
 };
+
+type Metrics = {
+  new_leads: number;
+  baymo_handled: number;
+  turned_warm: number;
+  turned_hot: number;
+  automation_active: boolean;
+};
+
+// Resend, same verified sender the lead-alert emailer (W9) uses. The key is a
+// separate edge-function secret; when it is absent the digest still generates
+// and the email is skipped rather than failing the run.
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+const DIGEST_FROM = 'BaMo <notifications@send.bahaymo.com>';
+const OPS_BCC = 'bamophilippines@gmail.com';
+const CRM_BASE = 'https://app.bahaymo.com';
+
+const esc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** "August 11, 2026" from a YYYY-MM-DD Manila date. */
+function prettyDate(d: string): string {
+  return new Date(`${d}T00:00:00+08:00`).toLocaleDateString('en-US', {
+    timeZone: 'Asia/Manila',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+/**
+ * The email carries the same numbers as the in-app card plus the full takeover
+ * list — the app filters suggestions per agent, but this goes to the client's
+ * admins, who see the whole workspace anyway.
+ */
+function renderDigestEmail(activityDate: string, m: Metrics, suggestions: Suggestion[]) {
+  const subject = m.automation_active
+    ? `Your BaMo morning update — ${m.new_leads} new lead${m.new_leads === 1 ? '' : 's'}, ${m.turned_hot} turned Hot`
+    : `Your BaMo morning update — ${m.new_leads} new lead${m.new_leads === 1 ? '' : 's'}, automation is off`;
+
+  const stat = (label: string, value: string | number, color: string) => `
+    <td style="padding:12px 8px;text-align:center;">
+      <div style="font-family:Poppins,Arial,sans-serif;font-size:28px;font-weight:700;color:${color};line-height:34px;">${value}</div>
+      <div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#5B5B5B;line-height:18px;">${label}</div>
+    </td>`;
+
+  const rows = suggestions
+    .map(
+      (s) => `
+      <tr>
+        <td style="padding:12px 16px;border-top:1px solid #E5E7EB;font-family:Poppins,Arial,sans-serif;font-size:14px;color:#3A3A3A;">
+          <strong>${esc(s.name)}</strong>
+          <span style="color:${s.temperature === 'Hot' ? '#E74C3C' : '#E67E22'};font-size:12px;">&nbsp;${esc(s.temperature)}</span>
+          <div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#5B5B5B;line-height:18px;">${esc(s.reason)}</div>
+        </td>
+        <td style="padding:12px 16px;border-top:1px solid #E5E7EB;text-align:right;white-space:nowrap;">
+          <a href="${CRM_BASE}/leads/${s.lead_id}" style="font-family:Poppins,Arial,sans-serif;font-size:13px;font-weight:600;color:#1F3C88;text-decoration:none;">Open lead &rarr;</a>
+        </td>
+      </tr>`,
+    )
+    .join('');
+
+  const closing = m.automation_active
+    ? suggestions.length
+      ? `<p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#5B5B5B;line-height:20px;">These leads replied and are waiting to hear from a person. BaMo has kept them warm — the handover is yours.</p>`
+      : `<p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#5B5B5B;line-height:20px;">Nothing needs your hands today. BaMo is handling the follow-ups.</p>`
+    : `<p style="margin:0;font-family:Inter,Arial,sans-serif;font-size:13px;color:#5B5B5B;line-height:20px;"><strong style="color:#E67E22;">BaMo automation is off.</strong> Activate a campaign and BaMo will answer and follow up on these leads for you.</p>`;
+
+  const html = `<!doctype html><html><body style="margin:0;padding:0;background:#FFF7ED;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF7ED;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #EBE1CF;">
+        <tr><td style="background:#1F3C88;padding:20px 24px;">
+          <div style="font-family:Poppins,Arial,sans-serif;font-size:18px;font-weight:600;color:#FFFFFF;line-height:24px;">Your BaMo morning update &#9728;</div>
+          <div style="font-family:Inter,Arial,sans-serif;font-size:12px;color:#F3C098;line-height:18px;">What happened on ${prettyDate(activityDate)}</div>
+        </td></tr>
+        <tr><td style="padding:8px 8px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            ${stat('New leads', m.new_leads, '#1F3C88')}
+            ${stat('BaMo handled', m.baymo_handled, '#1F3C88')}
+            ${stat('Turned Warm', m.turned_warm, '#E67E22')}
+            ${stat('Turned Hot', m.turned_hot, '#E74C3C')}
+          </tr></table>
+        </td></tr>
+        ${
+          suggestions.length
+            ? `<tr><td style="padding:16px 24px 0;">
+                 <div style="font-family:Poppins,Arial,sans-serif;font-size:16px;font-weight:600;color:#3A3A3A;line-height:22px;">Needs you today</div>
+               </td></tr>
+               <tr><td style="padding:4px 8px 0;">
+                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+               </td></tr>`
+            : ''
+        }
+        <tr><td style="padding:20px 24px 24px;">${closing}</td></tr>
+        <tr><td style="background:#FFFDF8;padding:14px 24px;border-top:1px solid #EBE1CF;">
+          <div style="font-family:Inter,Arial,sans-serif;font-size:11px;color:#9CA3AF;line-height:16px;">BaMo &middot; Real Estate Made Simple &middot; <a href="${CRM_BASE}" style="color:#1F3C88;text-decoration:none;">Open BaMo</a></div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table></body></html>`;
+
+  const text = [
+    `Your BaMo morning update — ${prettyDate(activityDate)}`,
+    '',
+    `New leads: ${m.new_leads}`,
+    `BaMo handled: ${m.baymo_handled}`,
+    `Turned Warm: ${m.turned_warm}`,
+    `Turned Hot: ${m.turned_hot}`,
+    '',
+    ...(suggestions.length
+      ? [
+          'Needs you today:',
+          ...suggestions.map((s) => `- ${s.name} (${s.temperature}) — ${s.reason}\n  ${CRM_BASE}/leads/${s.lead_id}`),
+          '',
+        ]
+      : []),
+    m.automation_active
+      ? 'BaMo is handling the follow-ups.'
+      : 'BaMo automation is off. Activate a campaign and BaMo will answer and follow up for you.',
+  ].join('\n');
+
+  return { subject, html, text };
+}
+
+/**
+ * Claim-then-send: the ledger row goes in BEFORE Resend is called, so a retried
+ * or overlapping cron tick collides on (client_id, digest_date) and no client is
+ * mailed twice. Never throws — a failed email must not cost the digest itself.
+ */
+async function emailDigest(
+  db: SupabaseClient,
+  clientId: string,
+  activityDate: string,
+  metrics: Metrics,
+  suggestions: Suggestion[],
+): Promise<string> {
+  const apiKey = Deno.env.get('RESEND_API_KEY');
+  if (!apiKey) return 'skipped:no_key';
+
+  const { data: recipients } = await db.rpc('digest_email_recipients', { p_client_id: clientId });
+  const to = ((recipients as string[] | null) ?? []).filter(Boolean);
+  if (!to.length) return 'skipped:no_recipient';
+
+  const { subject, html, text } = renderDigestEmail(activityDate, metrics, suggestions);
+
+  const { data: claim, error: claimErr } = await db
+    .from('daily_digest_emails')
+    .insert({ client_id: clientId, digest_date: activityDate, to_emails: to, subject })
+    .select('id')
+    .single();
+  if (claimErr || !claim) return 'skipped:already_sent'; // unique index — someone got here first
+
+  try {
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: DIGEST_FROM, to, bcc: [OPS_BCC], subject, html, text }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      await db.from('daily_digest_emails').update({
+        status: 'failed',
+        error: JSON.stringify(payload).slice(0, 500),
+        updated_at: new Date().toISOString(),
+      }).eq('id', (claim as { id: string }).id);
+      return 'failed';
+    }
+    await db.from('daily_digest_emails').update({
+      status: 'sent',
+      provider_id: (payload as { id?: string }).id ?? null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', (claim as { id: string }).id);
+    return 'sent';
+  } catch (e) {
+    await db.from('daily_digest_emails').update({
+      status: 'failed',
+      error: String(e).slice(0, 500),
+      updated_at: new Date().toISOString(),
+    }).eq('id', (claim as { id: string }).id);
+    return 'failed';
+  }
+}
 
 async function digestForClient(
   db: SupabaseClient,
@@ -113,7 +303,21 @@ async function digestForClient(
       }));
   }
 
-  if (dryRun) return { client_id: clientId, metrics, suggestions, dry_run: true };
+  // Something worth saying at all — gates both the in-app notification and the
+  // email, so quiet clients don't get a daily "nothing happened".
+  const hasNews = metrics.new_leads > 0 || metrics.baymo_handled > 0 || suggestions.length > 0;
+
+  if (dryRun) {
+    const { data: recipients } = await db.rpc('digest_email_recipients', { p_client_id: clientId });
+    const { subject, html, text } = renderDigestEmail(activityDate, metrics, suggestions);
+    return {
+      client_id: clientId,
+      metrics,
+      suggestions,
+      dry_run: true,
+      email: { would_send: hasNews, to: recipients ?? [], subject, html, text },
+    };
+  }
 
   // Digest row (idempotent per client+date).
   const { error: upErr } = await db.from('daily_digests').upsert(
@@ -148,7 +352,7 @@ async function digestForClient(
   // In-app notification per member — only when there is something to say, and
   // never twice for the same digest date.
   let notified = 0;
-  if (metrics.new_leads > 0 || metrics.baymo_handled > 0 || suggestions.length > 0) {
+  if (hasNews) {
     const [{ data: members }, { data: already }] = await Promise.all([
       db.from('profiles').select('id').eq('client_id', clientId),
       db.from('notifications').select('user_id')
@@ -173,7 +377,21 @@ async function digestForClient(
     }
   }
 
-  return { client_id: clientId, metrics, suggestions: suggestions.length, tasks_created: tasksCreated, notified };
+  // Email the same digest to the client's admins — the channel that actually
+  // lands. Deliberately after the digest/tasks/notification writes so nothing
+  // above depends on Resend being reachable.
+  const emailed = hasNews
+    ? await emailDigest(db, clientId, activityDate, metrics, suggestions)
+    : 'skipped:no_news';
+
+  return {
+    client_id: clientId,
+    metrics,
+    suggestions: suggestions.length,
+    tasks_created: tasksCreated,
+    notified,
+    emailed,
+  };
 }
 
 Deno.serve(async (req) => {
