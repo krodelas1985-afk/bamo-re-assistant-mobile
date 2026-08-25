@@ -89,6 +89,7 @@ export default function RootLayout() {
         <Stack.Screen name="ads" />
         <Stack.Screen name="campaign-request" options={{ presentation: 'modal' }} />
         <Stack.Screen name="connect-page" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="meta-connected" />
         <Stack.Screen name="automations" />
         <Stack.Screen name="automation-new" options={{ presentation: 'modal' }} />
         <Stack.Screen name="followup-setup" options={{ presentation: 'modal' }} />

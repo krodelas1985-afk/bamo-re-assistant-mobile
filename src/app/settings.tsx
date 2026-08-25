@@ -167,6 +167,24 @@ export default function SettingsScreen() {
         </View>
       </Pressable>
 
+      {/* Connections */}
+      <Pressable style={styles.card} onPress={() => router.push('/connect-page')}>
+        <View style={styles.connectionRow}>
+          <View style={styles.facebookIcon}>
+            <Ionicons name="logo-facebook" size={22} color={BrandColors.white} />
+          </View>
+          <View style={styles.connectionText}>
+            <Text style={styles.cardTitle}>Facebook Messenger</Text>
+            <Text style={styles.muted}>
+              {profile?.role === 'client_admin'
+                ? 'Connect and manage your Facebook Page'
+                : 'View your workspace connection'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={BrandColors.textMuted} />
+        </View>
+      </Pressable>
+
       {/* Password */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Change password</Text>
@@ -290,6 +308,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  connectionRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  connectionText: { flex: 1, gap: 2 },
+  facebookIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#1877F2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   workspace: {
     ...TypeScale.bodySmall,

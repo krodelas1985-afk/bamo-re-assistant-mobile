@@ -30,7 +30,7 @@ import {
   fetchMyAutomations,
   submitAutomation,
 } from '@/lib/automations';
-import { fetchLatestPageConnectionRequest } from '@/lib/page-connection';
+import { fetchMetaConnection } from '@/lib/page-connection';
 import { fetchMyFbPageId } from '@/lib/leads';
 import { fetchListingOptions } from '@/lib/website';
 
@@ -86,8 +86,8 @@ export default function AutomationNewScreen() {
       // A second automation can only be scoped.
       if (general) setScope('project');
     });
-    Promise.all([fetchMyFbPageId(), fetchLatestPageConnectionRequest()]).then(
-      ([pageId, req]) => setPageConnected(pageId != null || req?.status === 'connected'),
+    Promise.all([fetchMyFbPageId(), fetchMetaConnection().catch(() => null)]).then(
+      ([pageId, connection]) => setPageConnected(pageId != null || connection?.connected === true),
     );
   }, []);
 
@@ -447,8 +447,8 @@ export default function AutomationNewScreen() {
             ))}
             {sources.includes('messenger') && pageConnected === false && (
               <Text style={styles.warn}>
-                Your Facebook Page isn’t connected yet — you can still submit, and we’ll help you
-                connect it during review.
+                Your Facebook Page isn’t connected yet. Connect it in Settings so this automation
+                can receive Messenger leads.
               </Text>
             )}
           </>
