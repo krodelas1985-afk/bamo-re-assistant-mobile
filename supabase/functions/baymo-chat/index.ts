@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { executeRecord, proposeRecord, type RecordAction } from './actions.ts';
 import { resolveLeadContext } from './lead-context.ts';
 
 /**
@@ -6,11 +7,10 @@ import { resolveLeadContext } from './lead-context.ts';
  *
  * - General chat  -> OpenAI gpt-4o with a TOOL LOOP: BayMo can search the
  *   caller's own leads, read a conversation, check appointments/tasks/stats,
- *   create reminders, and PROPOSE a campaign enrollment. Enrollment never
- *   executes from the model: the tool only returns a `pending_action` that the
- *   app renders as a Confirm/Cancel card; tapping Confirm calls back with
- *   `action: 'execute_enroll'`, which runs the enroll_lead() RPC directly
- *   (no model in that path).
+ *   prepare task/appointment review cards, and PROPOSE a campaign enrollment.
+ *   Writes never execute from the model: tools return a signed `pending_action`
+ *   that the app renders as a Confirm/Edit/Cancel card; tapping Confirm calls
+ *   back through a model-free execution path.
  * - Document mode -> Anthropic claude-opus-4-8 when ANTHROPIC_API_KEY is set,
  *   otherwise falls back to OpenAI (unchanged from v1).
  *
@@ -34,7 +34,8 @@ const MAX_TOOL_ROUNDS = 6;
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 /** What the app renders as a Confirm/Cancel card. */
-type PendingAction = {
+type PendingAction = RecordAction | EnrollmentAction;
+type EnrollmentAction = {
   type: 'enroll_campaign';
   lead_id: string;
   lead_name: string;
@@ -101,11 +102,15 @@ async function toolSearchLeads(ctx: Ctx, args: Record<string, unknown>) {
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (typeof args.query === 'string' && args.query.trim())
+  if (typeof args.query === 'string' && args.query.trim()) {
     q = q.ilike('name', `%${args.query.trim()}%`);
-  if (typeof args.temperature === 'string' && args.temperature)
+  }
+  if (typeof args.temperature === 'string' && args.temperature) {
     q = q.eq('lead_temperature', args.temperature);
-  if (typeof args.status === 'string' && args.status) q = q.eq('status', args.status);
+  }
+  if (typeof args.status === 'string' && args.status) {
+    q = q.eq('status', args.status);
+  }
   const { data, error } = await q;
   if (error) return { error: error.message };
   return { count: (data ?? []).length, leads: data ?? [] };
@@ -163,7 +168,9 @@ async function toolGetAppointments(ctx: Ctx, args: Record<string, unknown>) {
   // Mirrors appointments_select RLS: client fence; agents only see their own.
   let q = ctx.admin
     .from('appointments')
-    .select('id, lead_id, title, contact_name, appointment_type, scheduled_at, location, notes, status')
+    .select(
+      'id, lead_id, title, contact_name, appointment_type, scheduled_at, location, notes, status',
+    )
     .eq('client_id', ctx.clientId!)
     .eq('status', 'scheduled')
     .gte('scheduled_at', from)
@@ -186,10 +193,16 @@ async function toolGetTasks(ctx: Ctx) {
     .in('status', ['pending', 'deferred'])
     .order('due_date', { ascending: true, nullsFirst: false })
     .limit(30);
-  if (ctx.role === 'agent') q = q.or(`assigned_to.eq.${ctx.uid},created_by.eq.${ctx.uid}`);
+  if (ctx.role === 'agent') {
+    q = q.or(`assigned_to.eq.${ctx.uid},created_by.eq.${ctx.uid}`);
+  }
   const { data, error } = await q;
   if (error) return { error: error.message };
-  return { count: (data ?? []).length, tasks: data ?? [], today_manila: manilaToday() };
+  return {
+    count: (data ?? []).length,
+    tasks: data ?? [],
+    today_manila: manilaToday(),
+  };
 }
 
 async function toolPipelineStats(ctx: Ctx) {
@@ -230,7 +243,7 @@ async function validateEnrollment(
   ctx: Ctx,
   leadId: string,
   campaignId: string,
-): Promise<{ pending?: PendingAction; error?: string }> {
+): Promise<{ pending?: EnrollmentAction; error?: string }> {
   if (!ctx.clientId) return { error: 'No client workspace on this account.' };
   const lead = await fetchScopedLead(ctx, leadId, 'id, name, messenger_id, campaign_id');
   if (!lead) return { error: 'Lead not found (or not assigned to this user).' };
@@ -241,8 +254,9 @@ async function validateEnrollment(
     .eq('client_id', ctx.clientId)
     .maybeSingle();
   if (!campaign) return { error: 'Campaign not found for this client.' };
-  if (campaign.status !== 'active' || campaign.is_active !== true)
+  if (campaign.status !== 'active' || campaign.is_active !== true) {
     return { error: `Campaign "${campaign.name}" is not active.` };
+  }
 
   const { data: state } = await ctx.admin
     .from('lead_campaign_states')
@@ -250,8 +264,11 @@ async function validateEnrollment(
     .eq('lead_id', leadId)
     .eq('campaign_id', campaignId)
     .maybeSingle();
-  if (state?.state === 'active')
-    return { error: `${lead.name} is already actively enrolled in "${campaign.name}".` };
+  if (state?.state === 'active') {
+    return {
+      error: `${lead.name} is already actively enrolled in "${campaign.name}".`,
+    };
+  }
 
   return {
     pending: {
@@ -267,44 +284,46 @@ async function validateEnrollment(
   };
 }
 
-async function toolCreateReminder(ctx: Ctx, args: Record<string, unknown>) {
-  const title = String(args.title ?? '').trim();
-  if (!title) return { error: 'title is required.' };
-  const dueDate =
-    typeof args.due_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.due_date)
-      ? args.due_date
-      : null;
-  let leadId: string | null = null;
-  if (typeof args.lead_id === 'string' && args.lead_id) {
-    const lead = await fetchScopedLead(ctx, args.lead_id, 'id');
-    if (!lead) return { error: 'Lead not found (or not assigned to this user).' };
-    leadId = args.lead_id;
-  }
-  const { data, error } = await ctx.admin
-    .from('tasks')
-    .insert({
-      client_id: ctx.clientId,
-      lead_id: leadId,
-      title,
-      notes: typeof args.notes === 'string' && args.notes.trim() ? args.notes.trim() : null,
-      due_date: dueDate,
-      status: 'pending',
-      // Chip on the Tasks screen reads non-'manual' sources as "🤖 BaMo".
-      source: 'baymo',
-      triggered_by: 'baymo',
-      task_type: leadId ? 'follow_up' : 'general',
-      assigned_to: ctx.uid,
-      created_by: ctx.uid,
-    })
-    .select('id, title, due_date')
-    .single();
-  if (error) return { error: error.message };
-  return { created: true, task: data, note: 'Reminder saved — it appears in the Tasks screen.' };
-}
-
 // ── OpenAI tool schemas ──────────────────────────────────────────────────────
 
 const OPENAI_TOOLS = [
+  ...(['create_task', 'create_appointment'] as const).map((name) => ({
+    type: 'function',
+    function: {
+      name,
+      description:
+        'Prepare a review card only. Nothing is saved until the agent taps Confirm. Ask for missing or ambiguous details first. Tasks have date-only deadlines, no timed notifications. Appointment times must be explicit Manila time.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          lead_id: { type: 'string' },
+          notes: { type: 'string' },
+          due_date: {
+            type: 'string',
+            description: 'Task due date YYYY-MM-DD, optional.',
+          },
+          scheduled_at: {
+            type: 'string',
+            description: 'Appointment YYYY-MM-DDTHH:mm:00+08:00. Ask AM/PM when unclear.',
+          },
+          appointment_type: {
+            type: 'string',
+            enum: ['viewing', 'call', 'event'],
+          },
+          location: {
+            type: 'string',
+            description: 'Meeting location or call method.',
+          },
+          contact_name: {
+            type: 'string',
+            description: 'Required for appointment without a lead.',
+          },
+        },
+        required: ['title'],
+      },
+    },
+  })),
   {
     type: 'function',
     function: {
@@ -314,7 +333,10 @@ const OPENAI_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Partial name to match (optional).' },
+          query: {
+            type: 'string',
+            description: 'Partial name to match (optional).',
+          },
           temperature: { type: 'string', enum: ['New', 'Hot', 'Warm', 'Cold'] },
           status: {
             type: 'string',
@@ -330,7 +352,10 @@ const OPENAI_TOOLS = [
               'Lost',
             ],
           },
-          limit: { type: 'number', description: 'Max results, default 8, max 20.' },
+          limit: {
+            type: 'number',
+            description: 'Max results, default 8, max 20.',
+          },
         },
       },
     },
@@ -356,7 +381,10 @@ const OPENAI_TOOLS = [
         type: 'object',
         properties: {
           lead_id: { type: 'string' },
-          limit: { type: 'number', description: 'Messages to fetch, default 15, max 40.' },
+          limit: {
+            type: 'number',
+            description: 'Messages to fetch, default 15, max 40.',
+          },
         },
         required: ['lead_id'],
       },
@@ -369,7 +397,12 @@ const OPENAI_TOOLS = [
       description: "The agent's upcoming scheduled appointments (viewings, calls, events).",
       parameters: {
         type: 'object',
-        properties: { days_ahead: { type: 'number', description: 'Window in days, default 7.' } },
+        properties: {
+          days_ahead: {
+            type: 'number',
+            description: 'Window in days, default 7.',
+          },
+        },
       },
     },
   },
@@ -405,32 +438,11 @@ const OPENAI_TOOLS = [
         'Propose enrolling a lead into a campaign. This does NOT enroll — it shows the user a Confirm card in the app. Use ONLY after resolving both the lead (search_leads) and the campaign (list_campaigns).',
       parameters: {
         type: 'object',
-        properties: { lead_id: { type: 'string' }, campaign_id: { type: 'string' } },
-        required: ['lead_id', 'campaign_id'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'create_reminder',
-      description:
-        'Create a reminder/task for the agent. Executes immediately (no confirm card). Dates are Asia/Manila.',
-      parameters: {
-        type: 'object',
         properties: {
-          title: {
-            type: 'string',
-            description: 'Short imperative title, e.g. "Call Maria about viewing".',
-          },
-          due_date: { type: 'string', description: 'YYYY-MM-DD (Manila). Omit for "anytime".' },
-          lead_id: {
-            type: 'string',
-            description: 'Attach to a lead (optional; resolve via search_leads first).',
-          },
-          notes: { type: 'string' },
+          lead_id: { type: 'string' },
+          campaign_id: { type: 'string' },
         },
-        required: ['title'],
+        required: ['lead_id', 'campaign_id'],
       },
     },
   },
@@ -441,8 +453,13 @@ async function runTool(
   name: string,
   args: Record<string, unknown>,
 ): Promise<{ result: unknown; pending?: PendingAction }> {
-  if (!ctx.clientId)
-    return { result: { error: 'No client workspace on this account yet — no data to read.' } };
+  if (!ctx.clientId) {
+    return {
+      result: {
+        error: 'No client workspace on this account yet — no data to read.',
+      },
+    };
+  }
   switch (name) {
     case 'search_leads':
       return { result: await toolSearchLeads(ctx, args) };
@@ -458,8 +475,26 @@ async function runTool(
       return { result: await toolPipelineStats(ctx) };
     case 'list_campaigns':
       return { result: await toolListCampaigns(ctx) };
-    case 'create_reminder':
-      return { result: await toolCreateReminder(ctx, args) };
+    case 'create_task':
+    case 'create_appointment': {
+      try {
+        const pending = await proposeRecord(
+          ctx,
+          name,
+          args,
+          JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default'],
+        );
+        return {
+          pending,
+          result: {
+            proposed: true,
+            note: 'Ask the user to review the card and tap Confirm. Nothing saved yet.',
+          },
+        };
+      } catch (error) {
+        return { result: { error: String(error) } };
+      }
+    }
     case 'propose_enrollment': {
       const v = await validateEnrollment(
         ctx,
@@ -472,7 +507,9 @@ async function runTool(
           proposed: true,
           note:
             'A Confirm card is now showing in the app. Tell the user to tap Confirm to enroll ' +
-            `${v.pending!.lead_name} in "${v.pending!.campaign_name}" — do NOT say it is done yet.` +
+            `${v.pending!.lead_name} in "${
+              v.pending!.campaign_name
+            }" — do NOT say it is done yet.` +
             (v.pending!.warning ? ` Warning to mention: ${v.pending!.warning}` : ''),
         },
         pending: v.pending,
@@ -493,7 +530,8 @@ Deno.serve(async (req) => {
     messages?: ChatMessage[];
     task?: 'chat' | 'document';
     document_type?: string;
-    action?: 'execute_enroll';
+    action?: 'execute_enroll' | 'execute_record';
+    proposal?: unknown;
     lead_id?: string;
     campaign_id?: string;
     context_lead_id?: string;
@@ -509,18 +547,15 @@ Deno.serve(async (req) => {
   const token = authHeader.replace(/^Bearer\s+/i, '');
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 
-  // verify_jwt=true already validated the token; decode its `sub` (user id) directly.
-  let uid = '';
-  try {
-    const claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    uid = claims.sub ?? '';
-  } catch {
-    // invalid token shape
+  const admin = createClient(
+    supabaseUrl,
+    JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default'],
+  );
+  const { data: identity, error: authError } = await admin.auth.getUser(token);
+  if (authError || !identity.user) {
+    return j({ error: 'Not authenticated' }, 401);
   }
-  if (!uid) return j({ error: 'Not authenticated' }, 401);
-
-  // Service-role client; every read/write below is scoped by the caller's profile.
-  const admin = createClient(supabaseUrl, JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default']);
+  const uid = identity.user.id;
 
   const { data: profile } = await admin
     .from('profiles')
@@ -536,11 +571,30 @@ Deno.serve(async (req) => {
     clientId: profile?.client_id ?? null,
   };
 
+  if (payload.action === 'execute_record') {
+    try {
+      return j(
+        await executeRecord(
+          ctx,
+          payload.proposal,
+          JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default'],
+        ),
+      );
+    } catch (error) {
+      return j({
+        ok: false,
+        error:
+          error instanceof Error ? error.message : 'Could not confirm the save. Retry this card.',
+      });
+    }
+  }
+
   // ── Execute path: user tapped Confirm on an enrollment card ──────────────
   // Model-free by design: the app calls this directly with the pending payload.
   if (payload.action === 'execute_enroll') {
-    if (!payload.lead_id || !payload.campaign_id)
+    if (!payload.lead_id || !payload.campaign_id) {
       return j({ error: 'lead_id and campaign_id are required' }, 400);
+    }
     const v = await validateEnrollment(ctx, payload.lead_id, payload.campaign_id);
     if (v.error) return j({ ok: false, error: v.error });
     const { data, error } = await admin.rpc('enroll_lead', {
@@ -550,12 +604,22 @@ Deno.serve(async (req) => {
       p_force: true, // manual path: explicit user confirmation just happened
     });
     if (error) return j({ ok: false, error: error.message });
-    const r = data as { enrolled?: boolean; campaign_name?: string; reason?: string } | null;
-    if (!r?.enrolled)
-      return j({ ok: false, error: `Enrollment failed (${r?.reason ?? 'unknown'})` });
+    const r = data as {
+      enrolled?: boolean;
+      campaign_name?: string;
+      reason?: string;
+    } | null;
+    if (!r?.enrolled) {
+      return j({
+        ok: false,
+        error: `Enrollment failed (${r?.reason ?? 'unknown'})`,
+      });
+    }
     return j({
       ok: true,
-      message: `${v.pending!.lead_name} is now enrolled in "${r.campaign_name ?? v.pending!.campaign_name}". BaMo will handle the follow-ups from here. 🎉`,
+      message: `${v.pending!.lead_name} is now enrolled in "${
+        r.campaign_name ?? v.pending!.campaign_name
+      }". BaMo will handle the follow-ups from here. 🎉`,
     });
   }
 
@@ -564,7 +628,10 @@ Deno.serve(async (req) => {
   if (messages.length === 0) return j({ error: 'messages is required' }, 400);
 
   const selectedContext = await resolveLeadContext(
-    admin, ctx, payload.context_lead_id, payload.context_listing_id,
+    admin,
+    ctx,
+    payload.context_lead_id,
+    payload.context_listing_id,
   );
   if (selectedContext.error) return j({ error: selectedContext.error });
 
@@ -580,12 +647,11 @@ Deno.serve(async (req) => {
     `them briefly and ask which one.\n` +
     `- Enrollment: list_campaigns → propose_enrollment. The proposal only shows a Confirm card; ` +
     `NEVER claim a lead was enrolled — the user must tap Confirm.\n` +
-    `- Reminders: you have NO memory outside tools. If the user asks to be reminded of anything, ` +
-    `you MUST call create_reminder in this turn — replying "I'll remind you" without the tool ` +
-    `call is a false promise. After the tool succeeds, confirm the exact title + date it saved.\n` +
+    `- Tasks and appointments: use create_task or create_appointment to propose a review card. Only propose ONE action per reply. Never claim saved until the user confirms in the app. Ask missing details; do not guess dates, AM/PM, contact, or location. Resolve relative dates in Manila. Task due dates have no time or notification. Never promise a timed reminder. Appointment cards require a location or call method and a future explicit time. Edits need a fresh proposal.\n` +
     `- Do not repeat raw IDs/UUIDs to the user; use names.\n` +
     `- You cannot send messages to leads yet. If asked, say that's coming soon and offer a ` +
-    `reminder or campaign enrollment instead.` + (selectedContext.context ?? '');
+    `task or campaign enrollment instead.` +
+    (selectedContext.context ?? '');
 
   const docSystem =
     `You are BayMo, drafting a professional Philippine real estate document` +
@@ -616,10 +682,17 @@ Deno.serve(async (req) => {
       });
       if (!resp.ok) {
         const t = await resp.text();
-        return j({ error: `Anthropic error ${resp.status}`, detail: t.slice(0, 500) }, 502);
+        return j(
+          {
+            error: `Anthropic error ${resp.status}`,
+            detail: t.slice(0, 500),
+          },
+          502,
+        );
       }
       const data = await resp.json();
-      const reply = (data.content ?? []).find((b: { type: string }) => b.type === 'text')?.text ?? '';
+      const reply =
+        (data.content ?? []).find((b: { type: string }) => b.type === 'text')?.text ?? '';
       return j({ reply, model_used: ANTHROPIC_MODEL });
     } catch (e) {
       return j({ error: `Anthropic call failed: ${String(e)}` }, 502);
@@ -628,21 +701,25 @@ Deno.serve(async (req) => {
 
   // Chat (and document fallback) -> OpenAI. Chat runs the tool loop.
   const openaiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!openaiKey) return j({ error: 'OPENAI_API_KEY secret is not set on this function' }, 500);
+  if (!openaiKey) {
+    return j({ error: 'OPENAI_API_KEY secret is not set on this function' }, 500);
+  }
 
   // deno-lint-ignore no-explicit-any
   const convo: any[] = [
     { role: 'system', content: task === 'document' ? docSystem : chatSystem },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
-  let pendingAction: PendingAction | null = null;
 
   try {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const lastRound = round === MAX_TOOL_ROUNDS;
       const resp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           model: OPENAI_MODEL,
           temperature: task === 'document' ? 0.4 : 0.6,
@@ -653,7 +730,13 @@ Deno.serve(async (req) => {
       });
       if (!resp.ok) {
         const t = await resp.text();
-        return j({ error: `OpenAI error ${resp.status}`, detail: t.slice(0, 500) }, 502);
+        return j(
+          {
+            error: `OpenAI error ${resp.status}`,
+            detail: t.slice(0, 500),
+          },
+          502,
+        );
       }
       const data = await resp.json();
       const msg = data?.choices?.[0]?.message;
@@ -665,7 +748,6 @@ Deno.serve(async (req) => {
         return j({
           reply: msg?.content ?? '',
           model_used: OPENAI_MODEL,
-          ...(pendingAction ? { pending_action: pendingAction } : {}),
         });
       }
 
@@ -678,7 +760,13 @@ Deno.serve(async (req) => {
           // leave args empty; the tool will report what's missing
         }
         const { result, pending } = await runTool(ctx, call.function.name, args);
-        if (pending) pendingAction = pending; // one card per reply; last proposal wins
+        if (pending) {
+          return j({
+            reply: 'Please review the details below. Nothing is saved until you tap Confirm.',
+            pending_action: pending,
+            model_used: OPENAI_MODEL,
+          });
+        }
         convo.push({
           role: 'tool',
           tool_call_id: call.id,

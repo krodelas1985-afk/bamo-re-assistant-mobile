@@ -8,7 +8,21 @@ export type ChatTask = 'chat' | 'document';
  * Confirm/Cancel card; Confirm calls executePendingAction(). The model never
  * executes writes like this itself — the confirm round-trip is model-free.
  */
-export type PendingAction = {
+export type RecordAction = {
+  type: 'create_task' | 'create_appointment';
+  id: string;
+  title: string;
+  lead_id: string | null;
+  lead_name: string | null;
+  notes: string | null;
+  due_date: string | null; scheduled_at: string | null;
+  appointment_type: 'viewing' | 'call' | 'event'; location: string | null;
+  contact_name: string | null;
+  warning: string;
+  expires_at: number;
+  signature: string;
+};
+export type PendingAction = RecordAction | {
   type: 'enroll_campaign';
   lead_id: string;
   lead_name: string;
@@ -50,7 +64,9 @@ export async function executePendingAction(
   action: PendingAction,
 ): Promise<{ ok: boolean; message: string }> {
   const { data, error } = await supabase.functions.invoke('baymo-chat', {
-    body: { action: 'execute_enroll', lead_id: action.lead_id, campaign_id: action.campaign_id },
+    body: action.type === 'enroll_campaign'
+      ? { action: 'execute_enroll', lead_id: action.lead_id, campaign_id: action.campaign_id }
+      : { action: 'execute_record', proposal: action },
   });
   if (error) return { ok: false, message: error.message };
   if (!data?.ok) return { ok: false, message: String(data?.error ?? 'Something went wrong.') };
@@ -60,6 +76,16 @@ export async function executePendingAction(
 export type QuickAction = { label: string; prompt: string; task: ChatTask; documentType?: string };
 
 export const QUICK_ACTIONS: QuickAction[] = [
+  {
+    label: 'Create a task',
+    prompt: 'Help me create a task. Ask me what needs doing and whether it needs a due date.',
+    task: 'chat',
+  },
+  {
+    label: 'Schedule appointment',
+    prompt: 'Help me schedule an appointment. Ask me for the contact, type, date, time and location or call method.',
+    task: 'chat',
+  },
   { label: '🔥 Show my hot leads', prompt: 'Show me my hot leads right now.', task: 'chat' },
   { label: '📅 What’s my day?', prompt: 'What are my appointments and tasks for today?', task: 'chat' },
   { label: '📊 Summarize my week', prompt: 'Give me a short summary of my leads this week.', task: 'chat' },
