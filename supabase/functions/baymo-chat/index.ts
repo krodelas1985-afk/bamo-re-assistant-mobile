@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { executeRecord, proposeRecord, type RecordAction } from './actions.ts';
 import { resolveLeadContext } from './lead-context.ts';
+import { transcribeVoiceFile } from './transcription.ts';
 
 /**
  * BayMo assistant chat proxy — v2, agentic.
@@ -530,17 +531,25 @@ Deno.serve(async (req) => {
     messages?: ChatMessage[];
     task?: 'chat' | 'document';
     document_type?: string;
-    action?: 'execute_enroll' | 'execute_record';
+    action?: 'execute_enroll' | 'execute_record' | 'transcribe';
     proposal?: unknown;
     lead_id?: string;
     campaign_id?: string;
     context_lead_id?: string;
     context_listing_id?: string;
   };
+  let voiceFile: File | null = null;
   try {
-    payload = await req.json();
+    if ((req.headers.get('Content-Type') ?? '').includes('multipart/form-data')) {
+      const form = await req.formData();
+      payload = { action: form.get('action') === 'transcribe' ? 'transcribe' : undefined };
+      const audio = form.get('audio');
+      voiceFile = audio instanceof File ? audio : null;
+    } else {
+      payload = await req.json();
+    }
   } catch {
-    return j({ error: 'Invalid JSON body' }, 400);
+    return j({ error: 'Invalid request body' }, 400);
   }
 
   const authHeader = req.headers.get('Authorization') ?? '';
@@ -570,6 +579,15 @@ Deno.serve(async (req) => {
     role: profile?.role ?? null,
     clientId: profile?.client_id ?? null,
   };
+
+  if (payload.action === 'transcribe') {
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiKey) {
+      return j({ error: 'OPENAI_API_KEY secret is not set on this function' }, 500);
+    }
+    const result = await transcribeVoiceFile(voiceFile, openaiKey);
+    return result.error ? j({ error: result.error }, result.status ?? 500) : j({ text: result.text });
+  }
 
   if (payload.action === 'execute_record') {
     try {

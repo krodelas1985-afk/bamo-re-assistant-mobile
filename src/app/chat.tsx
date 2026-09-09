@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import * as Speech from 'expo-speech';
 import {
   useCallback,
   useEffect,
@@ -28,6 +29,7 @@ import { LeadChatPanel } from '@/components/lead-chat-panel';
 import { fetchLeadDetail, type LeadDetail } from '@/lib/leads';
 import type { LeadChatContext, UiMessage } from '@/lib/chat-history-store';
 import { TagPill } from '@/components/ui/tag-pill';
+import { ChatVoiceButton } from '@/components/chat-voice-button';
 import {
   ChatMessage,
   PendingAction,
@@ -227,7 +229,41 @@ function AccountChatScreen({
     void store.load();
   }, [store]);
   const [input, setInput] = useState('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState(false);
+  const [speakingKey, setSpeakingKey] = useState<string | null>(null);
+  const interactionBusy = sending || voiceBusy;
   const seededRef = useRef(false);
+
+  const playSpeech = useCallback(async (key: string, text: string) => {
+    if (speakingKey === key) {
+      await Speech.stop();
+      setSpeakingKey(null);
+      return;
+    }
+    await Speech.stop();
+    const spoken = text.replace(/[*_#`]/g, '').slice(
+      0,
+      Math.min(Speech.maxSpeechInputLength, 4000),
+    );
+    if (!spoken) return;
+    setSpeakingKey(key);
+    Speech.speak(spoken, {
+      language: 'en-PH',
+      rate: 0.95,
+      onDone: () => setSpeakingKey((current) => current === key ? null : current),
+      onStopped: () => setSpeakingKey((current) => current === key ? null : current),
+      onError: () => {
+        setSpeakingKey((current) => current === key ? null : current);
+        setVoiceError('Could not play this reply. Check your phone volume and try again.');
+      },
+    });
+  }, [speakingKey]);
+
+  useEffect(() => () => {
+    void Speech.stop();
+  }, []);
 
   const scrollToEnd = () =>
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
@@ -237,6 +273,7 @@ function AccountChatScreen({
       text: string,
       task: QuickAction['task'] = 'chat',
       documentType?: string,
+      speakReply = false,
     ) => {
       const trimmed = text.trim();
       if (!trimmed || store.getSnapshot().busy || !ready) return;
@@ -254,6 +291,8 @@ function AccountChatScreen({
       setActiveId(conversationId);
       store.update(conversationId, (prev) => [...prev, userMsg]);
       setInput('');
+      setVoiceDraft(false);
+      setVoiceError(null);
       store.setBusy(true);
       scrollToEnd();
 
@@ -264,18 +303,23 @@ function AccountChatScreen({
           documentType,
           currentContext,
         );
-        store.update(conversationId, (prev) => [
-          ...prev,
-          {
+        let replyIndex = -1;
+        const replyContent = error
+          ? `Sorry, may problema — ${error}. Pakisubukan ulit.`
+          : reply || '…';
+        store.update(conversationId, (prev) => {
+          replyIndex = prev.length;
+          return [...prev, {
             role: 'assistant',
-            content: error
-              ? `Sorry, may problema — ${error}. Pakisubukan ulit.`
-              : reply || '…',
+            content: replyContent,
             ...(pendingAction && !error
               ? { pending: pendingAction, pendingState: 'open' as const }
               : {}),
-          },
-        ]);
+          }];
+        });
+        if (speakReply && !error) {
+          void playSpeech(`${conversationId}:${replyIndex}`, replyContent);
+        }
       } catch {
         store.update(conversationId, (prev) => [
           ...prev,
@@ -289,7 +333,7 @@ function AccountChatScreen({
       }
       scrollToEnd();
     },
-    [messages, activeId, ready, context, contextName, store],
+    [messages, activeId, ready, context, contextName, store, playSpeech],
   );
 
   // Welcome-tour handoff: /chat?seed=… auto-sends the user's "how can I help"
@@ -516,7 +560,7 @@ function AccountChatScreen({
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Open chat: ${chat.title}`}
-                      disabled={sending}
+                      disabled={interactionBusy}
                       style={styles.flex}
                       onPress={() => {
                         setDraftContext(chat.context);
@@ -538,7 +582,7 @@ function AccountChatScreen({
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Delete chat: ${chat.title}`}
-                      disabled={sending}
+                      disabled={interactionBusy}
                       style={styles.toolbarButton}
                       onPress={() => setDeleteId(chat.id)}
                     >
@@ -558,7 +602,7 @@ function AccountChatScreen({
                       <View style={styles.actionButtons}>
                         <Pressable
                           accessibilityRole="button"
-                          disabled={sending}
+                          disabled={interactionBusy}
                           style={styles.cancelBtn}
                           onPress={() => setDeleteId(null)}
                         >
@@ -566,7 +610,7 @@ function AccountChatScreen({
                         </Pressable>
                         <Pressable
                           accessibilityRole="button"
-                          disabled={sending}
+                          disabled={interactionBusy}
                           style={styles.confirmBtn}
                           onPress={() => {
                             store.remove(chat.id);
@@ -606,7 +650,7 @@ function AccountChatScreen({
               (!leadState.data && !leadState.error)
             }
             error={leadState.id === selectedLeadId ? leadState.error : null}
-            disabled={!ready || sending}
+            disabled={!ready || interactionBusy}
             onRetry={() => setLeadRetry((n) => n + 1)}
             onProperty={(listing) => {
               const next = {
@@ -628,7 +672,7 @@ function AccountChatScreen({
           />
           <Pressable
             accessibilityRole="button"
-            disabled={sending}
+            disabled={interactionBusy}
             onPress={() => {
               setActiveId(null);
               setDraftContext(undefined);
@@ -676,6 +720,32 @@ function AccountChatScreen({
                 >
                   {m.content}
                 </Text>
+                {m.role === 'assistant' && !!m.content && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      speakingKey === `${activeId ?? 'new'}:${i}`
+                        ? 'Stop BayMo voice'
+                        : 'Listen to BayMo reply'
+                    }
+                    disabled={interactionBusy}
+                    onPress={() => void playSpeech(
+                      `${activeId ?? 'new'}:${i}`,
+                      m.content,
+                    )}
+                    style={styles.speakButton}
+                  >
+                    <Ionicons
+                      name={
+                        speakingKey === `${activeId ?? 'new'}:${i}`
+                          ? 'stop-circle-outline'
+                          : 'volume-high-outline'
+                      }
+                      size={18}
+                      color={BrandColors.navy}
+                    />
+                  </Pressable>
+                )}
                 {m.pending && (
                   <View style={styles.actionCard}>
                     <Text style={styles.actionTitle}>
@@ -722,7 +792,7 @@ function AccountChatScreen({
                       <View style={styles.actionButtons}>
                         <Pressable
                           onPress={() => confirmAction(i, m.pending!)}
-                          disabled={sending}
+                          disabled={interactionBusy}
                           style={[
                             styles.confirmBtn,
                             m.pendingState === 'working' && styles.btnDisabled,
@@ -745,7 +815,7 @@ function AccountChatScreen({
                               cancelAction(i);
                               setInput(editActionPrompt(m.pending!));
                             }}
-                            disabled={sending}
+                            disabled={interactionBusy}
                             style={styles.cancelBtn}
                           >
                             <Text style={styles.cancelBtnText}>Edit</Text>
@@ -753,7 +823,7 @@ function AccountChatScreen({
                         )}
                         <Pressable
                           onPress={() => cancelAction(i)}
-                          disabled={sending}
+                          disabled={interactionBusy}
                           style={styles.cancelBtn}
                         >
                           <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -787,7 +857,7 @@ function AccountChatScreen({
                   key={qa.label}
                   label={qa.label}
                   onPress={
-                    ready && !sending
+                    ready && !interactionBusy
                       ? () => send(qa.prompt, qa.task, qa.documentType)
                       : undefined
                   }
@@ -797,25 +867,44 @@ function AccountChatScreen({
           </ScrollView>
         </View>
 
+        {!!voiceError && (
+          <Text accessibilityLiveRegion="polite" style={styles.voiceError}>
+            {voiceError}
+          </Text>
+        )}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
             value={input}
-            onChangeText={setInput}
+            onChangeText={(value) => {
+              setInput(value);
+              setVoiceError(null);
+              if (!value.trim()) setVoiceDraft(false);
+            }}
             placeholder="Message BayMo…"
             placeholderTextColor={BrandColors.textMuted}
             multiline
-            editable={ready && !sending}
-            onSubmitEditing={() => send(input)}
+            editable={ready && !interactionBusy}
+            onSubmitEditing={() => send(input, 'chat', undefined, voiceDraft)}
+          />
+          <ChatVoiceButton
+            disabled={!ready || sending}
+            onBusyChange={setVoiceBusy}
+            onError={setVoiceError}
+            onTranscript={(text) => {
+              setInput(text);
+              setVoiceDraft(true);
+              setVoiceError(null);
+            }}
           />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send message"
-            onPress={() => send(input)}
-            disabled={!ready || sending || !input.trim()}
+            onPress={() => send(input, 'chat', undefined, voiceDraft)}
+            disabled={!ready || interactionBusy || !input.trim()}
             style={[
               styles.sendBtn,
-              (!ready || sending || !input.trim()) && styles.sendBtnDisabled,
+              (!ready || interactionBusy || !input.trim()) && styles.sendBtnDisabled,
             ]}
           >
             <Ionicons name="arrow-up" size={20} color={BrandColors.white} />
@@ -938,6 +1027,14 @@ const styles = StyleSheet.create({
   },
   userText: { ...TypeScale.body, color: BrandColors.white },
   botText: { ...TypeScale.body, color: BrandColors.textBody },
+  speakButton: {
+    alignSelf: 'flex-end',
+    minWidth: 44,
+    minHeight: 44,
+    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Action proposal card (Confirm/Cancel) inside a BayMo bubble
   actionCard: {
     marginTop: 10,
@@ -982,6 +1079,12 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.7 },
   quickRow: { paddingHorizontal: 12, paddingBottom: 6 },
   quickPills: { flexDirection: 'row', gap: 8 },
+  voiceError: {
+    ...TypeScale.bodySmall,
+    color: BrandColors.error,
+    marginHorizontal: 20,
+    marginBottom: 4,
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
