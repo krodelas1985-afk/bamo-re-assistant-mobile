@@ -73,6 +73,47 @@ export async function executePendingAction(
   return { ok: true, message: String(data.message ?? 'Done!') };
 }
 
+/** Uploads one temporary recording for transcription. Audio is not stored in Supabase. */
+export async function transcribeBayMoAudio(
+  uri: string,
+  isWeb: boolean,
+): Promise<{ text: string | null; error: string | null }> {
+  try {
+    const body = new FormData();
+    body.append('action', 'transcribe');
+    if (isWeb) {
+      const audio = await fetch(uri).then((response) => response.blob());
+      body.append('audio', audio, 'baymo-voice.webm');
+    } else {
+      body.append(
+        'audio',
+        { uri, name: 'baymo-voice.m4a', type: 'audio/mp4' } as unknown as Blob,
+      );
+    }
+    const { data, error } = await supabase.functions.invoke('baymo-chat', { body });
+    if (error) {
+      let message = error.message;
+      const context = (error as { context?: Response }).context;
+      if (context) {
+        try {
+          const detail = await context.json() as { error?: unknown };
+          if (typeof detail.error === 'string') message = detail.error;
+        } catch {
+          // Keep the function client's network/status message.
+        }
+      }
+      return { text: null, error: message };
+    }
+    if (data?.error) return { text: null, error: String(data.error) };
+    const text = typeof data?.text === 'string' ? data.text.trim() : '';
+    return text
+      ? { text, error: null }
+      : { text: null, error: 'No speech was detected. Please record again.' };
+  } catch {
+    return { text: null, error: 'Could not prepare that recording. Please try again.' };
+  }
+}
+
 export type QuickAction = { label: string; prompt: string; task: ChatTask; documentType?: string };
 
 export const QUICK_ACTIONS: QuickAction[] = [
