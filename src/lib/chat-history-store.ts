@@ -104,7 +104,12 @@ export class ChatHistoryStore {
             ...(m.pending &&
             m.pendingState !== 'confirmed' &&
             m.pendingState !== 'cancelled'
-              ? { pendingState: 'expired' as const }
+              ? {
+                  pendingState:
+                    m.pending.type === 'enroll_campaign'
+                      ? 'expired' as const
+                      : 'open' as const,
+                }
               : {}),
           })),
         };

@@ -68,6 +68,37 @@ const LEAD_QUICK_ACTIONS: QuickAction[] = [
   },
 ];
 
+function pendingActionDetails(action: PendingAction): string {
+  if (action.type === 'enroll_campaign') {
+    return `${action.lead_name} → ${action.campaign_name}`;
+  }
+  const schedule = action.type === 'create_task'
+    ? `Due: ${action.due_date || 'No due date'}`
+    : `${action.appointment_type} · ${new Date(action.scheduled_at!).toLocaleString(
+        'en-PH',
+        {
+          timeZone: 'Asia/Manila',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        },
+      )} (Manila)`;
+  return [
+    action.title,
+    action.lead_name || action.contact_name,
+    schedule,
+    action.location,
+    action.notes,
+  ].filter(Boolean).join('\n');
+}
+
+function editActionPrompt(action: PendingAction): string {
+  if (action.type === 'enroll_campaign') return '';
+  return `Change this proposed ${action.type === 'create_task' ? 'task' : 'appointment'}:\n${pendingActionDetails(action)}\nChange: `;
+}
+
 export default function ChatScreen() {
   const { session } = useAuth();
   const { leadId: routeLeadId } = useLocalSearchParams<{ leadId?: string }>();
@@ -293,22 +324,30 @@ function AccountChatScreen({
       updateCard('working');
       try {
         const { ok, message } = await executePendingAction(pending);
-        updateCard(ok ? 'confirmed' : 'expired');
+        updateCard(
+          ok
+            ? 'confirmed'
+            : pending.type === 'enroll_campaign'
+              ? 'expired'
+              : 'open',
+        );
         store.update(conversationId, (prev) => [
           ...prev,
           {
             role: 'assistant',
-            content: ok ? message : `Hindi natuloy — ${message}`,
+            content: ok ? message : `Save not confirmed — ${message}`,
           },
         ]);
       } catch {
-        updateCard('expired');
+        updateCard(pending.type === 'enroll_campaign' ? 'expired' : 'open');
         store.update(conversationId, (prev) => [
           ...prev,
           {
             role: 'assistant',
             content:
-              'Could not verify enrollment. Check the lead before asking BayMo to try again.',
+              pending.type === 'enroll_campaign'
+                ? 'Could not verify enrollment. Check the lead before trying again.'
+                : 'Could not verify the save. Tap Confirm on this same card to retry safely. Check Tasks or Calendar before making a replacement.',
           },
         ]);
       } finally {
@@ -580,18 +619,12 @@ function AccountChatScreen({
               if (activeId) store.setContext(activeId, next);
               else setDraftContext(next);
             }}
-            onTask={() =>
-              router.push({
-                pathname: '/task-new',
-                params: { leadId: context.leadId },
-              })
-            }
-            onAppointment={() =>
-              router.push({
-                pathname: '/appointment-new',
-                params: { leadId: context.leadId },
-              })
-            }
+            onTask={() => void send(
+              'Create a follow-up task for this lead. Ask me what needs doing and whether it needs a due date.',
+            )}
+            onAppointment={() => void send(
+              'Schedule an appointment for this lead. Ask me for any missing type, date, time, and location or call method.',
+            )}
           />
           <Pressable
             accessibilityRole="button"
@@ -645,15 +678,15 @@ function AccountChatScreen({
                 </Text>
                 {m.pending && (
                   <View style={styles.actionCard}>
-                    <Text style={styles.actionTitle}>Enroll in campaign</Text>
+                    <Text style={styles.actionTitle}>
+                      {m.pending.type === 'enroll_campaign'
+                        ? 'Enroll in campaign'
+                        : m.pending.type === 'create_task'
+                          ? 'Create task'
+                          : 'Schedule appointment'}
+                    </Text>
                     <Text style={styles.actionBody}>
-                      <Text style={styles.actionStrong}>
-                        {m.pending.lead_name}
-                      </Text>
-                      {' → '}
-                      <Text style={styles.actionStrong}>
-                        {m.pending.campaign_name}
-                      </Text>
+                      {pendingActionDetails(m.pending)}
                     </Text>
                     {!!m.pending.warning && (
                       <Text style={styles.actionWarning}>
@@ -661,7 +694,23 @@ function AccountChatScreen({
                       </Text>
                     )}
                     {m.pendingState === 'confirmed' ? (
-                      <Text style={styles.actionDone}>✅ Enrolled</Text>
+                      <View>
+                        <Text style={styles.actionDone}>✅ {m.pending.type === 'enroll_campaign' ? 'Enrolled' : 'Saved'}</Text>
+                        {m.pending.type !== 'enroll_campaign' && (
+                          <Pressable
+                            accessibilityRole="button"
+                            onPress={() => router.push(
+                              m.pending!.type === 'create_task' ? '/tasks' : '/calendar',
+                            )}
+                          >
+                            <Text style={styles.cancelBtnText}>
+                              {m.pending.type === 'create_task'
+                                ? 'View task'
+                                : 'View appointment'}
+                            </Text>
+                          </Pressable>
+                        )}
+                      </View>
                     ) : m.pendingState === 'cancelled' ? (
                       <Text style={styles.actionCancelled}>Cancelled</Text>
                     ) : m.pendingState === 'expired' ? (
@@ -688,6 +737,20 @@ function AccountChatScreen({
                             <Text style={styles.confirmBtnText}>Confirm</Text>
                           )}
                         </Pressable>
+                        {m.pending.type !== 'enroll_campaign' && (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Edit proposal"
+                            onPress={() => {
+                              cancelAction(i);
+                              setInput(editActionPrompt(m.pending!));
+                            }}
+                            disabled={sending}
+                            style={styles.cancelBtn}
+                          >
+                            <Text style={styles.cancelBtnText}>Edit</Text>
+                          </Pressable>
+                        )}
                         <Pressable
                           onPress={() => cancelAction(i)}
                           disabled={sending}

@@ -115,8 +115,8 @@ export function LeadChatPanel({
             </Pressable>
           </View>
           <Text style={styles.note}>
-            Opens a form with this lead selected. Nothing is saved until you
-            confirm there.
+            BayMo will ask for the details and show a review card. Nothing is
+            saved until you tap Confirm.
           </Text>
         </>
       )}

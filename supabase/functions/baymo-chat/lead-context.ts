@@ -14,8 +14,7 @@ export async function resolveLeadContext(
     !scope.clientId ||
     typeof leadId !== 'string' ||
     !leadId.trim() ||
-    (listingId !== undefined &&
-      (typeof listingId !== 'string' || !listingId.trim()))
+    (listingId !== undefined && (typeof listingId !== 'string' || !listingId.trim()))
   ) {
     return {
       error: 'Please reopen Ask BayMo from an accessible Lead Profile.',
@@ -28,13 +27,14 @@ export async function resolveLeadContext(
     .eq('client_id', scope.clientId);
   if (scope.role === 'agent') query = query.eq('assigned_user_id', scope.uid);
   const { data: lead, error: leadError } = await query.maybeSingle();
-  if (leadError)
+  if (leadError) {
     return { error: 'Could not refresh this lead. Please try again.' };
-  if (!lead)
+  }
+  if (!lead) {
     return {
-      error:
-        'This lead is no longer available to you. Reopen an accessible Lead Profile.',
+      error: 'This lead is no longer available to you. Reopen an accessible Lead Profile.',
     };
+  }
 
   let property: Record<string, unknown> | null = null;
   if (typeof listingId === 'string') {
@@ -47,15 +47,17 @@ export async function resolveLeadContext(
       .eq('client_id', scope.clientId);
     if (scope.role === 'agent') listings = listings.eq('created_by', scope.uid);
     const { data, error } = await listings.maybeSingle();
-    if (error)
+    if (error) {
       return {
         error: 'Could not refresh the selected property. Please try again.',
       };
-    if (!data)
+    }
+    if (!data) {
       return {
         error:
           'The selected property is no longer available. Choose another property or clear the selection.',
       };
+    }
     property = data;
   }
   return {
@@ -70,6 +72,6 @@ export async function resolveLeadContext(
       (property
         ? 'The agent explicitly selected this property for discussion; this is not proof the buyer chose it. Use only the provided property facts. Do not infer financing, availability, or fees from missing fields. If asked about another property, ask the agent to change the property selection.\n'
         : 'No property is selected. Do not invent a property or infer a confirmed listing from a budget or property preference. For property-specific facts, ask the agent to choose a property in the chat.\n') +
-      'You cannot create appointments through chat yet. Direct the agent to the Schedule appointment shortcut, which opens a form; never claim a booking or client message was sent.\n',
+      'Use create_task or create_appointment to prepare a review card for this lead. Ask for missing details and never claim saved or a client notified before confirmation.\n',
   };
 }
