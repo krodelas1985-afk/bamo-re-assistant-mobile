@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   useCallback,
   useEffect,
@@ -24,7 +24,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/auth-context';
 import { getChatHistory } from '@/lib/chat-history';
-import type { UiMessage } from '@/lib/chat-history-store';
+import { LeadChatPanel } from '@/components/lead-chat-panel';
+import { fetchLeadDetail, type LeadDetail } from '@/lib/leads';
+import type { LeadChatContext, UiMessage } from '@/lib/chat-history-store';
 import { TagPill } from '@/components/ui/tag-pill';
 import {
   ChatMessage,
@@ -51,19 +53,50 @@ const GREETING: UiMessage = {
 };
 
 const INITIAL_MESSAGES = [GREETING];
+const LEAD_QUICK_ACTIONS: QuickAction[] = [
+  {
+    label: 'Summarize this lead',
+    prompt:
+      'Summarize this lead using their current profile and qualification details.',
+    task: 'chat',
+  },
+  {
+    label: 'Show recent conversation',
+    prompt:
+      'Review this lead’s recent conversation and summarize what they asked and what still needs attention.',
+    task: 'chat',
+  },
+];
 
 export default function ChatScreen() {
   const { session } = useAuth();
+  const { leadId: routeLeadId } = useLocalSearchParams<{ leadId?: string }>();
+  const leadId =
+    typeof routeLeadId === 'string' && routeLeadId.trim()
+      ? routeLeadId
+      : undefined;
   if (!session?.user.id)
     return (
       <SafeAreaView>
         <Text>Please sign in to chat with BayMo.</Text>
       </SafeAreaView>
     );
-  return <AccountChatScreen key={session.user.id} userId={session.user.id} />;
+  return (
+    <AccountChatScreen
+      key={`${session.user.id}:${leadId ?? 'general'}`}
+      userId={session.user.id}
+      leadId={leadId}
+    />
+  );
 }
 
-function AccountChatScreen({ userId }: { userId: string }) {
+function AccountChatScreen({
+  userId,
+  leadId,
+}: {
+  userId: string;
+  leadId?: string;
+}) {
   const router = useRouter();
   const { seed } = useLocalSearchParams<{ seed?: string }>();
   const scrollRef = useRef<ScrollView>(null);
@@ -74,9 +107,89 @@ function AccountChatScreen({ userId }: { userId: string }) {
     store.getSnapshot,
   );
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [draftContext, setDraftContext] = useState<LeadChatContext | undefined>(
+    leadId ? { leadId, leadName: 'Selected lead' } : undefined,
+  );
+  const [initialized, setInitialized] = useState(false);
+  const openedLead = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    void store.load().then(() => {
+      if (cancelled || !store.getSnapshot().ready || openedLead.current) return;
+      openedLead.current = true;
+      if (leadId) {
+        const previous = store
+          .getSnapshot()
+          .conversations.find((c) => c.context?.leadId === leadId);
+        if (previous) {
+          setActiveId(previous.id);
+          setDraftContext(previous.context);
+        }
+      }
+      setInitialized(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [store, saved.ready, leadId]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const active = saved.conversations.find((c) => c.id === activeId);
+  const context = active?.context ?? draftContext;
+  const selectedLeadId = context?.leadId;
+  const [leadState, setLeadState] = useState<{
+    id?: string;
+    revision?: number;
+    data: LeadDetail | null;
+    error: string | null;
+  }>({ data: null, error: null });
+  const [leadRetry, setLeadRetry] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (!selectedLeadId) return;
+      let cancelled = false;
+      setLeadState({
+        id: selectedLeadId,
+        revision: leadRetry,
+        data: null,
+        error: null,
+      });
+      fetchLeadDetail(selectedLeadId)
+        .then(({ data, error }) => {
+          if (!cancelled)
+            setLeadState({
+              id: selectedLeadId,
+              revision: leadRetry,
+              data,
+              error: error
+                ? 'Could not refresh this lead. Please retry.'
+                : data
+                  ? null
+                  : 'This lead is no longer available to you. Open another lead or start a general chat.',
+            });
+        })
+        .catch(() => {
+          if (!cancelled)
+            setLeadState({
+              id: selectedLeadId,
+              revision: leadRetry,
+              data: null,
+              error: 'Could not refresh this lead. Please retry.',
+            });
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [selectedLeadId, leadRetry]),
+  );
+  const contextReady =
+    !context ||
+    (leadState.id === selectedLeadId && !!leadState.data && !leadState.error);
+  const ready = saved.ready && initialized && contextReady;
+  const contextName =
+    leadState.id === selectedLeadId && leadState.data
+      ? leadState.data.name
+      : (context?.leadName ?? '');
   const messages = active?.messages.length ? active.messages : INITIAL_MESSAGES;
   const sending = saved.busy;
   useEffect(() => {
@@ -95,13 +208,18 @@ function AccountChatScreen({ userId }: { userId: string }) {
       documentType?: string,
     ) => {
       const trimmed = text.trim();
-      if (!trimmed || store.getSnapshot().busy || !saved.ready) return;
+      if (!trimmed || store.getSnapshot().busy || !ready) return;
       const userMsg: UiMessage = { role: 'user', content: trimmed };
       // Server history is text-only: strip the greeting and any card metadata.
       const history: ChatMessage[] = messages
         .filter((m) => m !== GREETING)
         .map((m) => ({ role: m.role, content: m.content }));
-      const conversationId = activeId ?? store.create(trimmed);
+      const currentContext = context
+        ? { ...context, leadName: contextName }
+        : undefined;
+      const conversationId = activeId ?? store.create(trimmed, currentContext);
+      if (activeId && currentContext)
+        store.setContext(activeId, currentContext);
       setActiveId(conversationId);
       store.update(conversationId, (prev) => [...prev, userMsg]);
       setInput('');
@@ -113,6 +231,7 @@ function AccountChatScreen({ userId }: { userId: string }) {
           [...history, { role: 'user', content: trimmed }],
           task,
           documentType,
+          currentContext,
         );
         store.update(conversationId, (prev) => [
           ...prev,
@@ -139,13 +258,13 @@ function AccountChatScreen({ userId }: { userId: string }) {
       }
       scrollToEnd();
     },
-    [messages, activeId, saved.ready, store],
+    [messages, activeId, ready, context, contextName, store],
   );
 
   // Welcome-tour handoff: /chat?seed=… auto-sends the user's "how can I help"
   // answer as their first message so BayMo opens with context. Once only.
   useEffect(() => {
-    if (seededRef.current || !saved.ready) return;
+    if (seededRef.current || !ready) return;
     if (typeof seed === 'string' && seed.trim()) {
       // Next tick: sending inside the effect body would setState mid-render.
       const t = setTimeout(() => {
@@ -155,7 +274,7 @@ function AccountChatScreen({ userId }: { userId: string }) {
       }, 0);
       return () => clearTimeout(t);
     }
-  }, [seed, send, saved.ready, store]);
+  }, [seed, send, ready, store]);
 
   /**
    * Confirm on an action card → model-free execute call, then show the result.
@@ -213,6 +332,7 @@ function AccountChatScreen({ userId }: { userId: string }) {
   );
 
   const newChat = () => {
+    setDraftContext(context);
     setActiveId(null);
     setInput('');
     setHistoryOpen(false);
@@ -360,6 +480,7 @@ function AccountChatScreen({ userId }: { userId: string }) {
                       disabled={sending}
                       style={styles.flex}
                       onPress={() => {
+                        setDraftContext(chat.context);
                         setActiveId(chat.id);
                         setInput('');
                         setHistoryOpen(false);
@@ -371,6 +492,7 @@ function AccountChatScreen({ userId }: { userId: string }) {
                         {chat.title}
                       </Text>
                       <Text style={styles.historyHelp}>
+                        {chat.context ? `${chat.context.leadName} · ` : ''}
                         {new Date(chat.updatedAt).toLocaleString()}
                       </Text>
                     </Pressable>
@@ -410,6 +532,7 @@ function AccountChatScreen({ userId }: { userId: string }) {
                           onPress={() => {
                             store.remove(chat.id);
                             if (activeId === chat.id) {
+                              setDraftContext(chat.context);
                               setActiveId(null);
                               setInput('');
                             }
@@ -433,6 +556,61 @@ function AccountChatScreen({ userId }: { userId: string }) {
         </View>
       </Modal>
 
+      {context && (
+        <>
+          <LeadChatPanel
+            key={context.leadId}
+            context={context}
+            name={contextName}
+            loading={
+              leadState.id !== selectedLeadId ||
+              (!leadState.data && !leadState.error)
+            }
+            error={leadState.id === selectedLeadId ? leadState.error : null}
+            disabled={!ready || sending}
+            onRetry={() => setLeadRetry((n) => n + 1)}
+            onProperty={(listing) => {
+              const next = {
+                leadId: context.leadId,
+                leadName: contextName,
+                ...(listing
+                  ? { listingId: listing.id, listingTitle: listing.title }
+                  : {}),
+              };
+              if (activeId) store.setContext(activeId, next);
+              else setDraftContext(next);
+            }}
+            onTask={() =>
+              router.push({
+                pathname: '/task-new',
+                params: { leadId: context.leadId },
+              })
+            }
+            onAppointment={() =>
+              router.push({
+                pathname: '/appointment-new',
+                params: { leadId: context.leadId },
+              })
+            }
+          />
+          <Pressable
+            accessibilityRole="button"
+            disabled={sending}
+            onPress={() => {
+              setActiveId(null);
+              setDraftContext(undefined);
+              setInput('');
+            }}
+            style={{
+              alignSelf: 'flex-end',
+              paddingHorizontal: 20,
+              paddingBottom: 6,
+            }}
+          >
+            <Text style={styles.historyHelp}>Start general chat</Text>
+          </Pressable>
+        </>
+      )}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -541,11 +719,15 @@ function AccountChatScreen({ userId }: { userId: string }) {
         <View style={styles.quickRow}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.quickPills}>
-              {QUICK_ACTIONS.map((qa) => (
+              {(context ? LEAD_QUICK_ACTIONS : QUICK_ACTIONS).map((qa) => (
                 <TagPill
                   key={qa.label}
                   label={qa.label}
-                  onPress={() => send(qa.prompt, qa.task, qa.documentType)}
+                  onPress={
+                    ready && !sending
+                      ? () => send(qa.prompt, qa.task, qa.documentType)
+                      : undefined
+                  }
                 />
               ))}
             </View>
@@ -560,17 +742,17 @@ function AccountChatScreen({ userId }: { userId: string }) {
             placeholder="Message BayMo…"
             placeholderTextColor={BrandColors.textMuted}
             multiline
-            editable={saved.ready && !sending}
+            editable={ready && !sending}
             onSubmitEditing={() => send(input)}
           />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send message"
             onPress={() => send(input)}
-            disabled={!saved.ready || sending || !input.trim()}
+            disabled={!ready || sending || !input.trim()}
             style={[
               styles.sendBtn,
-              (sending || !input.trim()) && styles.sendBtnDisabled,
+              (!ready || sending || !input.trim()) && styles.sendBtnDisabled,
             ]}
           >
             <Ionicons name="arrow-up" size={20} color={BrandColors.white} />

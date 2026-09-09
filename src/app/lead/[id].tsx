@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -241,6 +242,18 @@ export default function LeadProfileScreen() {
             </View>
 
             {/* Details */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Ask BayMo about ${lead.name}`}
+              onPress={() => router.push({ pathname: '/chat', params: { leadId: lead.id } })}
+              style={[styles.card, { flexDirection: 'row', alignItems: 'center' }]}>
+              <Image source={require('../../../assets/brand/baymo-head.png')} style={{ width: 48, height: 48, borderRadius: 24 }} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.cardTitle}>Ask BayMo</Text>
+                <Text style={styles.summaryText}>Understand this lead, review their conversation, and plan your next step.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={BrandColors.coral} />
+            </Pressable>
             {detailRows(lead).length > 0 ? (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Details</Text>

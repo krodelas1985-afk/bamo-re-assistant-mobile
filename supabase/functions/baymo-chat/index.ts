@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveLeadContext } from './lead-context.ts';
 
 /**
  * BayMo assistant chat proxy — v2, agentic.
@@ -495,6 +496,8 @@ Deno.serve(async (req) => {
     action?: 'execute_enroll';
     lead_id?: string;
     campaign_id?: string;
+    context_lead_id?: string;
+    context_listing_id?: string;
   };
   try {
     payload = await req.json();
@@ -560,6 +563,11 @@ Deno.serve(async (req) => {
   const task = payload.task === 'document' ? 'document' : 'chat';
   if (messages.length === 0) return j({ error: 'messages is required' }, 400);
 
+  const selectedContext = await resolveLeadContext(
+    admin, ctx, payload.context_lead_id, payload.context_listing_id,
+  );
+  if (selectedContext.error) return j({ error: selectedContext.error });
+
   const chatSystem =
     `You are BayMo, the friendly AI assistant inside the BaMo real estate app for Philippine ` +
     `agents, brokers, and developers. You are talking to ${agentName}. Today is ${manilaToday()} ` +
@@ -577,7 +585,7 @@ Deno.serve(async (req) => {
     `call is a false promise. After the tool succeeds, confirm the exact title + date it saved.\n` +
     `- Do not repeat raw IDs/UUIDs to the user; use names.\n` +
     `- You cannot send messages to leads yet. If asked, say that's coming soon and offer a ` +
-    `reminder or campaign enrollment instead.`;
+    `reminder or campaign enrollment instead.` + (selectedContext.context ?? '');
 
   const docSystem =
     `You are BayMo, drafting a professional Philippine real estate document` +
