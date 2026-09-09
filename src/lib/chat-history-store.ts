@@ -9,6 +9,13 @@ export type Conversation = {
   title: string;
   updatedAt: string;
   messages: UiMessage[];
+  context?: LeadChatContext;
+};
+export type LeadChatContext = {
+  leadId: string;
+  leadName: string;
+  listingId?: string;
+  listingTitle?: string;
 };
 type Storage = {
   getItem(key: string): Promise<string | null>;
@@ -72,6 +79,13 @@ export class ChatHistoryStore {
           typeof row.id !== 'string' ||
           typeof row.title !== 'string' ||
           typeof row.updatedAt !== 'string' ||
+          (row.context != null &&
+            (typeof row.context.leadId !== 'string' ||
+              typeof row.context.leadName !== 'string' ||
+              (row.context.listingId != null &&
+                typeof row.context.listingId !== 'string') ||
+              (row.context.listingTitle != null &&
+                typeof row.context.listingTitle !== 'string'))) ||
           !Array.isArray(row.messages) ||
           !row.messages.every(
             (m: UiMessage) =>
@@ -125,7 +139,7 @@ export class ChatHistoryStore {
   setBusy(busy: boolean) {
     this.publish({ busy });
   }
-  create(firstMessage: string): string {
+  create(firstMessage: string, context?: LeadChatContext): string {
     if (!this.snapshot.ready) throw new Error('History is still loading');
     const id = `${Date.now()}-${++this.sequence}-${Math.random().toString(36).slice(2, 10)}`;
     const title = firstMessage.trim().replace(/\s+/g, ' ').slice(0, 60);
@@ -134,6 +148,7 @@ export class ChatHistoryStore {
       title,
       updatedAt: new Date().toISOString(),
       messages: [],
+      ...(context ? { context } : {}),
     };
     this.publish({
       conversations: [conversation, ...this.snapshot.conversations].slice(
@@ -142,6 +157,14 @@ export class ChatHistoryStore {
       ),
     });
     return id;
+  }
+  setContext(id: string, context: LeadChatContext) {
+    this.publish({
+      conversations: this.snapshot.conversations.map((c) =>
+        c.id === id ? { ...c, context } : c,
+      ),
+    });
+    void this.persist();
   }
   update(id: string, change: (messages: UiMessage[]) => UiMessage[]) {
     const current = this.snapshot.conversations.find((c) => c.id === id);

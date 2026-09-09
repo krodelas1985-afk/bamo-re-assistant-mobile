@@ -87,6 +87,24 @@ export async function setAppointmentStatus(
 }
 
 /** Lightweight lead list for the appointment contact picker. */
+export async function fetchLeadFormOptions(selectedId?: string): Promise<{
+  options: { id: string; name: string }[];
+  selected: { id: string; name: string; phone: string | null } | null;
+}> {
+  const [options, result] = await Promise.all([
+    fetchLeadOptions(),
+    selectedId ? supabase.from('leads').select('id, name, phone').eq('id', selectedId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (selectedId && (result.error || !result.data)) {
+    throw new Error('This lead could not be loaded. Go back to the Lead Profile and try again.');
+  }
+  const selected = result.data as { id: string; name: string; phone: string | null } | null;
+  return {
+    options: selected && !options.some(l => l.id === selected.id) ? [selected, ...options] : options,
+    selected,
+  };
+}
+
 export async function fetchLeadOptions(): Promise<{ id: string; name: string }[]> {
   const { data } = await supabase
     .from('leads')

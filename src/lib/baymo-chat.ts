@@ -28,9 +28,13 @@ export async function sendToBayMo(
   messages: ChatMessage[],
   task: ChatTask = 'chat',
   documentType?: string,
+  context?: { leadId: string; listingId?: string },
 ): Promise<{ reply: string | null; pendingAction: PendingAction | null; error: string | null }> {
   const { data, error } = await supabase.functions.invoke('baymo-chat', {
-    body: { messages, task, document_type: documentType },
+    body: {
+      messages, task, document_type: documentType,
+      ...(context ? { context_lead_id: context.leadId, context_listing_id: context.listingId } : {}),
+    },
   });
   if (error) return { reply: null, pendingAction: null, error: error.message };
   if (data?.error) return { reply: null, pendingAction: null, error: String(data.error) };
