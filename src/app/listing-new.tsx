@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -167,7 +168,7 @@ export default function NewListingScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Photos */}
         <Text style={styles.section}>Photos</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -260,7 +261,7 @@ export default function NewListingScreen() {
             Your workspace isn&apos;t linked yet, so saving is disabled. Finish onboarding first.
           </Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button label="Save draft" variant="secondary" onPress={() => save('draft')} style={styles.footerBtn} />

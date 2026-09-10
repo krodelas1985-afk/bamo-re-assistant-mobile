@@ -7,11 +7,11 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -147,7 +147,7 @@ export default function WebsiteRequestScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Hero photo */}
         <Text style={styles.section}>Hero photo</Text>
         <Text style={styles.hint}>Your main website photo — a headshot or a signature property.</Text>
@@ -230,7 +230,7 @@ export default function WebsiteRequestScreen() {
             Your workspace isn’t linked yet, so submitting is disabled. Finish onboarding first.
           </Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button

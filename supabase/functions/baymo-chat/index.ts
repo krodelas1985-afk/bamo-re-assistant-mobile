@@ -31,6 +31,7 @@ const cors = {
 const OPENAI_MODEL = 'gpt-4o';
 const ANTHROPIC_MODEL = 'claude-opus-4-8';
 const MAX_TOOL_ROUNDS = 6;
+const MAX_VOICE_REQUEST_BYTES = 9 * 1024 * 1024;
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -541,6 +542,10 @@ Deno.serve(async (req) => {
   let voiceFile: File | null = null;
   try {
     if ((req.headers.get('Content-Type') ?? '').includes('multipart/form-data')) {
+      const contentLength = Number(req.headers.get('Content-Length') ?? 0);
+      if (contentLength > MAX_VOICE_REQUEST_BYTES) {
+        return j({ error: 'The recording is too large. Keep it under 60 seconds.' }, 413);
+      }
       const form = await req.formData();
       payload = { action: form.get('action') === 'transcribe' ? 'transcribe' : undefined };
       const audio = form.get('audio');

@@ -5,12 +5,12 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -183,7 +183,7 @@ export default function DocumentEditorScreen() {
           <ActivityIndicator color={BrandColors.navy} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {isNew && (
             <>
               <Text style={styles.section}>Document type</Text>
@@ -303,7 +303,7 @@ export default function DocumentEditorScreen() {
               Your workspace isn’t linked yet, so saving is disabled. Finish onboarding first.
             </Text>
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
 
       {(!isNew || !!body) && !loading && (

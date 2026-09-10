@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BaymoBubble } from '@/components/baymo-bubble';
@@ -37,7 +38,13 @@ export function Screen({
           {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
         </View>
       ) : null}
-      <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView>
+      <KeyboardAwareScrollView
+        bottomOffset={24}
+        contentContainerStyle={styles.content}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled">
+        {children}
+      </KeyboardAwareScrollView>
       {showBaymo && <BaymoBubble onPress={() => router.push('/chat')} />}
     </SafeAreaView>
   );

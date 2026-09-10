@@ -203,6 +203,9 @@ test('lead/property context survives restart and legacy general history remains 
 test('the chat API carries only selected IDs and preserves general-chat requests', async () => {
   const requests = [];
   const { sendToBayMo } = load('src/lib/baymo-chat.ts', {
+    'expo/fetch': { fetch: globalThis.fetch },
+    'expo-file-system': { File: globalThis.File },
+    'react-native': { Platform: { OS: 'web' } },
     '@/lib/supabase': {
       supabase: {
         functions: {

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView, KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { Button } from '@/components/ui/button';
 import { TextField } from '@/components/ui/text-field';
@@ -80,7 +81,7 @@ export function LeadFilterSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView style={styles.backdrop} behavior="padding" automaticOffset>
         <Pressable style={styles.backdropTouch} onPress={onClose} />
         <View style={styles.sheet}>
           <View style={styles.header}>
@@ -98,7 +99,10 @@ export function LeadFilterSheet({
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <KeyboardAwareScrollView
+            bottomOffset={16}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled">
             <Section label="Sort by">
               {SORT_OPTIONS.map((s) => (
                 <Chip
@@ -187,7 +191,7 @@ export function LeadFilterSheet({
               onChangeText={(preferredLocation) => set({ preferredLocation })}
               placeholder="e.g. Batangas, Vermira"
             />
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
           <View style={styles.footer}>
             <Button
@@ -200,7 +204,7 @@ export function LeadFilterSheet({
             />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

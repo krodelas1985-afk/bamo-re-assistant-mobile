@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import * as Speech from 'expo-speech';
 import {
   useCallback,
   useEffect,
@@ -11,8 +10,6 @@ import {
 } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Modal,
   Pressable,
   ScrollView,
@@ -21,6 +18,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/auth-context';
@@ -30,6 +28,7 @@ import { fetchLeadDetail, type LeadDetail } from '@/lib/leads';
 import type { LeadChatContext, UiMessage } from '@/lib/chat-history-store';
 import { TagPill } from '@/components/ui/tag-pill';
 import { ChatVoiceButton } from '@/components/chat-voice-button';
+import { BayMoSpeechButton, useBayMoSpeech } from '@/components/baymo-speech';
 import {
   ChatMessage,
   PendingAction,
@@ -232,38 +231,9 @@ function AccountChatScreen({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceDraft, setVoiceDraft] = useState(false);
-  const [speakingKey, setSpeakingKey] = useState<string | null>(null);
+  const { speakingKey, playSpeech } = useBayMoSpeech(setVoiceError);
   const interactionBusy = sending || voiceBusy;
   const seededRef = useRef(false);
-
-  const playSpeech = useCallback(async (key: string, text: string) => {
-    if (speakingKey === key) {
-      await Speech.stop();
-      setSpeakingKey(null);
-      return;
-    }
-    await Speech.stop();
-    const spoken = text.replace(/[*_#`]/g, '').slice(
-      0,
-      Math.min(Speech.maxSpeechInputLength, 4000),
-    );
-    if (!spoken) return;
-    setSpeakingKey(key);
-    Speech.speak(spoken, {
-      language: 'en-PH',
-      rate: 0.95,
-      onDone: () => setSpeakingKey((current) => current === key ? null : current),
-      onStopped: () => setSpeakingKey((current) => current === key ? null : current),
-      onError: () => {
-        setSpeakingKey((current) => current === key ? null : current);
-        setVoiceError('Could not play this reply. Check your phone volume and try again.');
-      },
-    });
-  }, [speakingKey]);
-
-  useEffect(() => () => {
-    void Speech.stop();
-  }, []);
 
   const scrollToEnd = () =>
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
@@ -690,8 +660,8 @@ function AccountChatScreen({
       )}
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={8}
+        behavior="padding"
+        automaticOffset
       >
         <ScrollView ref={scrollRef} contentContainerStyle={styles.messages}>
           {messages.map((m, i) => (
@@ -721,30 +691,14 @@ function AccountChatScreen({
                   {m.content}
                 </Text>
                 {m.role === 'assistant' && !!m.content && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      speakingKey === `${activeId ?? 'new'}:${i}`
-                        ? 'Stop BayMo voice'
-                        : 'Listen to BayMo reply'
-                    }
+                  <BayMoSpeechButton
+                    speaking={speakingKey === `${activeId ?? 'new'}:${i}`}
                     disabled={interactionBusy}
                     onPress={() => void playSpeech(
                       `${activeId ?? 'new'}:${i}`,
                       m.content,
                     )}
-                    style={styles.speakButton}
-                  >
-                    <Ionicons
-                      name={
-                        speakingKey === `${activeId ?? 'new'}:${i}`
-                          ? 'stop-circle-outline'
-                          : 'volume-high-outline'
-                      }
-                      size={18}
-                      color={BrandColors.navy}
-                    />
-                  </Pressable>
+                  />
                 )}
                 {m.pending && (
                   <View style={styles.actionCard}>
@@ -1027,14 +981,6 @@ const styles = StyleSheet.create({
   },
   userText: { ...TypeScale.body, color: BrandColors.white },
   botText: { ...TypeScale.body, color: BrandColors.textBody },
-  speakButton: {
-    alignSelf: 'flex-end',
-    minWidth: 44,
-    minHeight: 44,
-    marginTop: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   // Action proposal card (Confirm/Cancel) inside a BayMo bubble
   actionCard: {
     marginTop: 10,

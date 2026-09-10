@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -201,7 +201,7 @@ export default function AutomationNewScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {STEPS[step] === 'Type' && (
           <>
             <Text style={styles.question}>What is this automation for?</Text>
@@ -504,7 +504,7 @@ export default function AutomationNewScreen() {
             </Text>
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         {STEPS[step] === 'Review' ? (

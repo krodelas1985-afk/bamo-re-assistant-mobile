@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -92,7 +93,7 @@ export default function NewLeadScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <TextField
           label="Name *"
           value={name}
@@ -192,7 +193,7 @@ export default function NewLeadScreen() {
             Your workspace isn&apos;t linked yet, so saving is disabled. Finish onboarding first.
           </Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button label={saving ? 'Saving…' : 'Add lead'} onPress={save} style={styles.footerBtn} />

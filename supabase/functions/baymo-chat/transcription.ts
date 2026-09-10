@@ -12,7 +12,9 @@ export function validateVoiceFile(value: unknown): string | null {
   if (value.size < 100) return 'The recording is empty. Please record again.';
   if (value.size > MAX_AUDIO_BYTES) return 'The recording is too large. Keep it under 60 seconds.';
   const mediaType = value.type.toLowerCase().split(';', 1)[0];
-  if (!ALLOWED_AUDIO_TYPES.has(mediaType)) {
+  const extension = value.name.toLowerCase().match(/\.(m4a|mp4|webm)$/)?.[1];
+  const canInferType = (!mediaType || mediaType === 'application/octet-stream') && extension;
+  if (!ALLOWED_AUDIO_TYPES.has(mediaType) && !canInferType) {
     return 'This audio format is not supported. Please record again in BaMo.';
   }
   return null;
@@ -43,13 +45,17 @@ export async function transcribeVoiceFile(
       body,
     });
     if (!response.ok) {
+      console.warn('BayMo transcription provider rejected a request', { status: response.status });
       return { error: 'BayMo could not transcribe that recording. Please try again.', status: 502 };
     }
     const data = await response.json() as { text?: unknown };
     const text = typeof data.text === 'string' ? data.text.trim() : '';
     if (!text) return { error: 'No speech was detected. Please record again.', status: 422 };
     return { text };
-  } catch {
+  } catch (error) {
+    console.warn('BayMo transcription provider request failed', {
+      name: error instanceof Error ? error.name : 'UnknownError',
+    });
     return { error: 'BayMo could not reach the transcription service. Please try again.', status: 502 };
   }
 }

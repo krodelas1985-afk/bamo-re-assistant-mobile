@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -164,7 +165,7 @@ export default function WelcomeTourScreen() {
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 1 && (
           <View style={styles.heroWrap}>
             <FloatingBaymo />
@@ -320,7 +321,7 @@ export default function WelcomeTourScreen() {
         )}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* BayMo corner avatar on the task steps (hero steps show him large). */}
       {step >= 2 && step <= 6 && (

@@ -5,12 +5,12 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
@@ -97,7 +97,7 @@ export default function FollowupSetupScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.lede}>
           When a lead goes quiet, BayMo follows up for you — and steps back the moment they reply.
           Choose which campaigns it should work on.
@@ -158,7 +158,7 @@ export default function FollowupSetupScreen() {
             team so the timing and message style suit your campaign.
           </Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
