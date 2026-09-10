@@ -1,4 +1,6 @@
 -- Self-serve signup: the user who provisions a workspace becomes its admin.
+-- APPLIED to zyfkjxepykwpfzmkxitb on 2026-09-10 via apply_migration
+-- (name: promote_self_serve_owner_to_client_admin).
 --
 -- Problem this fixes
 -- ------------------
