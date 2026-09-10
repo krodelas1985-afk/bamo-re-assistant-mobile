@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import { TagPill } from '@/components/ui/tag-pill';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, TypeScale } from '@/constants/brand';
-import { fetchLeadOptions } from '@/lib/appointments';
+import { fetchLeadFormOptions } from '@/lib/appointments';
 import { TeamMember, createTask, daysFromToday, fetchTeamMembers, manilaToday } from '@/lib/tasks';
 
 // Matches the CRM's task-type vocabulary so both apps filter the same way.
@@ -23,7 +24,15 @@ const TYPES = [
 ] as const;
 
 export default function NewTaskScreen() {
+  const { leadId: routeLeadId } = useLocalSearchParams<{ leadId?: string }>();
+  const initialLeadId = typeof routeLeadId === 'string' ? routeLeadId : undefined;
+  return <LeadForm key={initialLeadId ?? 'manual'} initialLeadId={initialLeadId} />;
+}
+
+function LeadForm({initialLeadId}: {initialLeadId?: string}) {
   const router = useRouter();
+  const [prefillLoading, setPrefillLoading] = useState(!!initialLeadId);
+  const [prefillError, setPrefillError] = useState<string | null>(null);
   const { profile, session } = useAuth();
   const clientId = profile?.client_id ?? null;
   const myId = session?.user.id ?? null;
@@ -39,9 +48,20 @@ export default function NewTaskScreen() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchLeadOptions().then(setLeads);
+    let cancelled = false;
+    fetchLeadFormOptions(initialLeadId).then(({options, selected}) => {
+      if (cancelled) return;
+      setLeads(options);
+      if (selected) {
+        setLeadId(selected.id);
+        setTitle(`Follow up with ${selected.name}`);
+      }
+    }).catch(() => {
+      if (!cancelled && initialLeadId) setPrefillError('This lead could not be loaded. Go back to the Lead Profile and try again.');
+    }).finally(() => { if (!cancelled) setPrefillLoading(false); });
     fetchTeamMembers().then(setTeam);
-  }, []);
+    return () => { cancelled = true; };
+  }, [initialLeadId]);
 
   const setQuickDue = (days: number) => {
     const [y, m, d] = daysFromToday(days).split('-').map(Number);
@@ -49,6 +69,10 @@ export default function NewTaskScreen() {
   };
 
   const save = async () => {
+    if (prefillLoading || prefillError) {
+      Alert.alert('Lead not ready', prefillError ?? 'Please wait while the selected lead loads.');
+      return;
+    }
     if (!clientId || !myId) {
       Alert.alert('Not ready', 'Your workspace is still being set up. Please try again shortly.');
       return;
@@ -84,7 +108,9 @@ export default function NewTaskScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {prefillLoading && <Text style={styles.fieldLabel}>Loading selected lead…</Text>}
+        {prefillError && <Text style={[styles.fieldLabel, { color: BrandColors.error }]}>{prefillError}</Text>}
         <TextField
           label="What needs doing?"
           value={title}
@@ -154,7 +180,7 @@ export default function NewTaskScreen() {
         {!clientId && (
           <Text style={styles.warn}>Your workspace isn&apos;t linked yet, so saving is disabled. Finish onboarding first.</Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button label={saving ? 'Saving…' : 'Add task'} onPress={save} style={styles.footerBtn} />

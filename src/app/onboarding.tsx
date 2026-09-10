@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,7 @@ const TOTAL_STEPS = 5;
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { profile, session, refreshOnboarding } = useAuth();
+  const { profile, session, refreshProfile } = useAuth();
   const [record, setRecord] = useState<Onboarding | null>(null);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -136,7 +137,10 @@ export default function OnboardingScreen() {
         setError(e);
         return;
       }
-      await refreshOnboarding();
+      // Submitting auto-provisions the free workspace server-side (trigger sets
+      // profiles.client_id). Reload the profile so client_id is live in memory,
+      // which also recomputes the onboarding gate.
+      await refreshProfile();
       router.replace('/');
     }
   };
@@ -171,7 +175,7 @@ export default function OnboardingScreen() {
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {step === 1 && (
           <>
             <View style={styles.heroRow}>
@@ -303,7 +307,7 @@ export default function OnboardingScreen() {
         )}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         {step > 1 ? (

@@ -2,13 +2,14 @@
   "expo": {
     "name": "BaMo RE AI Assistant",
     "slug": "bamo-re-assistant",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bamo",
     "userInterfaceStyle": "light",
     "android": {
       "package": "com.bamo.reassistant",
+      "softwareKeyboardLayoutMode": "resize",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#1F3C88",
@@ -18,7 +19,6 @@
       },
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA"
       ]
     },
@@ -32,8 +32,7 @@
         "expo-image-picker",
         {
           "photosPermission": "BaMo needs access to your photos so you can add them to your property listings.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "cameraPermission": false
         }
       ],
       [
@@ -49,6 +48,15 @@
         "expo-notifications",
         {
           "color": "#E67E22"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "BaMo uses your microphone only when you record a voice message for BayMo.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
         }
       ]
     ],

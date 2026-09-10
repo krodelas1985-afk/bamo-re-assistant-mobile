@@ -1,15 +1,13 @@
 import { Image } from 'expo-image';
-import { Redirect } from 'expo-router';
+import { Link, Redirect } from 'expo-router';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView, KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -50,8 +48,13 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        behavior="padding"
+        automaticOffset>
+        <KeyboardAwareScrollView
+          bottomOffset={24}
+          contentContainerStyle={styles.content}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
             <Image source={baymoAvatar} style={styles.baymo} contentFit="contain" />
             <Text style={styles.wordmark}>BaMo</Text>
@@ -100,11 +103,18 @@ export default function LoginScreen() {
               style={styles.submit}
             />
 
-            <Text style={styles.helper}>
-              No account yet? Your BaMo onboarding specialist sets this up for you.
-            </Text>
+            <Link href="/forgot-password" style={styles.forgot}>
+              Forgot password?
+            </Link>
+
+            <View style={styles.footer}>
+              <Text style={styles.helper}>No account yet? </Text>
+              <Link href="/signup" style={styles.link}>
+                Create one — it&apos;s free
+              </Link>
+            </View>
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -184,9 +194,26 @@ const styles = StyleSheet.create({
   submit: {
     marginTop: 4,
   },
+  forgot: {
+    ...TypeScale.label,
+    color: BrandColors.navy,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
   helper: {
     ...TypeScale.helper,
     color: BrandColors.textMuted,
     textAlign: 'center',
+  },
+  link: {
+    ...TypeScale.bodyBold,
+    color: BrandColors.navy,
   },
 });

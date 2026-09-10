@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { Screen } from '@/components/screen';
 import { Button } from '@/components/ui/button';
@@ -153,8 +154,9 @@ export default function WebsiteScreen() {
 
       {/* Modify-request modal */}
       <Modal visible={modifyOpen} transparent animationType="fade" onRequestClose={() => setModifyOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <KeyboardAvoidingView style={styles.modalFlex} behavior="padding" automaticOffset>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Request changes</Text>
             <Text style={styles.modalSub}>Tell us what you’d like updated on your website.</Text>
             <TextField
@@ -178,8 +180,9 @@ export default function WebsiteScreen() {
                 style={styles.flexBtn}
               />
             </View>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );
@@ -383,6 +386,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   actionLabel: { ...TypeScale.h4, color: BrandColors.textHeading, flex: 1 },
+  modalFlex: { flex: 1 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',

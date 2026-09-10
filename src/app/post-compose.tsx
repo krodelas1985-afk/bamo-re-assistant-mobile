@@ -14,6 +14,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -295,7 +296,7 @@ export default function PostComposeScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* AI generator */}
         <View style={styles.aiCard}>
           <View style={styles.aiHeader}>
@@ -480,7 +481,7 @@ export default function PostComposeScreen() {
             <TextField label="Time (24h)" value={time} onChangeText={setTime} placeholder="e.g. 18:30" autoCapitalize="none" />
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button
