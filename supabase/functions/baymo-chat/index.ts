@@ -1,6 +1,9 @@
+// Deno resolves this URL import when the Edge Function is bundled.
+// eslint-disable-next-line import/no-unresolved
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { executeRecord, proposeRecord, type RecordAction } from './actions.ts';
 import { resolveLeadContext } from './lead-context.ts';
+import { generateBayMoSpeech } from './speech.ts';
 import { transcribeVoiceFile } from './transcription.ts';
 
 /**
@@ -532,7 +535,8 @@ Deno.serve(async (req) => {
     messages?: ChatMessage[];
     task?: 'chat' | 'document';
     document_type?: string;
-    action?: 'execute_enroll' | 'execute_record' | 'transcribe';
+    action?: 'execute_enroll' | 'execute_record' | 'transcribe' | 'speak';
+    text?: string;
     proposal?: unknown;
     lead_id?: string;
     campaign_id?: string;
@@ -592,6 +596,24 @@ Deno.serve(async (req) => {
     }
     const result = await transcribeVoiceFile(voiceFile, openaiKey);
     return result.error ? j({ error: result.error }, result.status ?? 500) : j({ text: result.text });
+  }
+
+  if (payload.action === 'speak') {
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiKey) {
+      return j({ error: 'BayMo voice is not configured.' }, 500);
+    }
+    const result = await generateBayMoSpeech(payload.text, openaiKey);
+    if (result.error || !result.audio) {
+      return j({ error: result.error ?? 'BayMo could not prepare the voice reply.' }, result.status ?? 500);
+    }
+    return new Response(result.audio, {
+      headers: {
+        ...cors,
+        'Content-Type': 'audio/aac',
+        'Cache-Control': 'private, no-store',
+      },
+    });
   }
 
   if (payload.action === 'execute_record') {

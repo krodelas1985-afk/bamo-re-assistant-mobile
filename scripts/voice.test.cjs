@@ -11,6 +11,13 @@ mod._compile(ts.transpileModule(
 ).outputText, 'transcription.cjs');
 const { transcribeVoiceFile, validateVoiceFile } = mod.exports;
 
+const speechMod = new Module('speech');
+speechMod._compile(ts.transpileModule(
+  fs.readFileSync('supabase/functions/baymo-chat/speech.ts', 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+).outputText, 'speech.cjs');
+const { BAYMO_SPEECH_CONFIG, generateBayMoSpeech, prepareSpeechText } = speechMod.exports;
+
 function load(file, mocks) {
   const loaded = new Module(file);
   loaded.require = (name) => {
@@ -151,4 +158,81 @@ test('Android client uploads an Expo File instead of a React Native uri object',
   assert.equal(uploaded.name, 'recording.m4a');
   assert.equal(uploaded.type, 'audio/mp4');
   assert.equal(uploaded.size, 200);
+});
+
+test('BayMo speech is pinned to Cedar with the approved Filipino direction', async () => {
+  let request;
+  const result = await generateBayMoSpeech('  **Kumusta!**   Viewing tayo bukas. ', 'test-key', async (url, options) => {
+    request = { url, options };
+    return new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { 'Content-Type': 'audio/aac' },
+    });
+  });
+  assert.equal(request.url, 'https://api.openai.com/v1/audio/speech');
+  const body = JSON.parse(request.options.body);
+  assert.equal(body.model, 'gpt-4o-mini-tts-2025-12-15');
+  assert.equal(body.voice, 'cedar');
+  assert.equal(body.input, 'Kumusta! Viewing tayo bukas.');
+  assert.match(body.instructions, /Filipino real-estate virtual assistant/);
+  assert.match(body.instructions, /Taglish cadence/);
+  assert.equal(body.response_format, 'aac');
+  assert.equal(result.audio.byteLength, 3);
+  assert.equal(BAYMO_SPEECH_CONFIG.voice, 'cedar');
+  assert.equal(prepareSpeechText('  ## Hello   there '), 'Hello there');
+});
+
+test('BayMo speech returns safe errors when the provider fails', async () => {
+  const rejected = await generateBayMoSpeech('Hello', 'test-key', async () =>
+    new Response('private provider detail', { status: 429 }));
+  assert.equal(rejected.status, 502);
+  assert.match(rejected.error, /could not prepare/);
+  assert.equal(await prepareSpeechText('   '), null);
+});
+
+test('Android stores Cedar audio in temporary cache and deletes it after playback', async () => {
+  let request;
+  let createdFile;
+  class MockCacheFile {
+    constructor(directory, name) {
+      this.uri = `${directory}/${name}`;
+      this.exists = false;
+      this.deleted = false;
+      createdFile = this;
+    }
+    create() { this.exists = true; }
+    write(bytes) { this.bytes = bytes; }
+    delete() { this.deleted = true; this.exists = false; }
+  }
+  const { synthesizeBayMoSpeech } = load('src/lib/baymo-chat.ts', {
+    'expo/fetch': {
+      fetch: async (url, options) => {
+        request = { url, options };
+        return {
+          ok: true,
+          bytes: async () => new Uint8Array([7, 8, 9]),
+        };
+      },
+    },
+    'expo-file-system': { File: MockCacheFile, Paths: { cache: 'file:///cache' } },
+    'react-native': { Platform: { OS: 'android' } },
+    '@/lib/supabase': {
+      getEdgeFunctionAuth: async () => ({
+        url: 'https://example.supabase.co/functions/v1/baymo-chat',
+        anonKey: 'anon-key',
+        accessToken: 'access-token',
+      }),
+      supabase: {},
+    },
+  });
+  const result = await synthesizeBayMoSpeech(' **Call** Edz tomorrow. ');
+  assert.equal(request.url, 'https://example.supabase.co/functions/v1/baymo-chat');
+  assert.deepEqual(JSON.parse(request.options.body), {
+    action: 'speak',
+    text: 'Call Edz tomorrow.',
+  });
+  assert.match(result.audio.uri, /baymo-cedar-\d+\.aac$/);
+  assert.deepEqual([...createdFile.bytes], [7, 8, 9]);
+  result.audio.cleanup();
+  assert.equal(createdFile.deleted, true);
 });
