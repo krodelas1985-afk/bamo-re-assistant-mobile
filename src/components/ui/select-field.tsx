@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
@@ -69,45 +70,48 @@ export function SelectField({
       {disabled && disabledHint ? <Text style={styles.hint}>{disabledHint}</Text> : null}
 
       <Modal visible={open} transparent animationType="none" onRequestClose={close}>
-        <Pressable style={styles.overlay} onPress={close}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <Text style={styles.sheetTitle}>{label}</Text>
-            <View style={styles.searchRow}>
-              <Ionicons name="search" size={16} color={BrandColors.textMuted} />
-              <TextInput
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search…"
-                placeholderTextColor={BrandColors.textMuted}
-                autoCorrect={false}
+        <KeyboardAvoidingView style={styles.modalFlex} behavior="padding" automaticOffset>
+          <Pressable style={styles.overlay} onPress={close}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{label}</Text>
+              <View style={styles.searchRow}>
+                <Ionicons name="search" size={16} color={BrandColors.textMuted} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search…"
+                  placeholderTextColor={BrandColors.textMuted}
+                  autoCorrect={false}
+                />
+              </View>
+              <FlatList
+                data={filtered}
+                keyExtractor={(item) => item}
+                style={styles.list}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={<Text style={styles.empty}>No matches</Text>}
+                renderItem={({ item }) => (
+                  <Pressable style={styles.option} onPress={() => pick(item)}>
+                    <Text style={[styles.optionText, item === value && styles.optionSelected]}>
+                      {item}
+                    </Text>
+                    {item === value ? (
+                      <Ionicons name="checkmark" size={18} color={BrandColors.orange} />
+                    ) : null}
+                  </Pressable>
+                )}
               />
-            </View>
-            <FlatList
-              data={filtered}
-              keyExtractor={(item) => item}
-              style={styles.list}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={<Text style={styles.empty}>No matches</Text>}
-              renderItem={({ item }) => (
-                <Pressable style={styles.option} onPress={() => pick(item)}>
-                  <Text style={[styles.optionText, item === value && styles.optionSelected]}>
-                    {item}
-                  </Text>
-                  {item === value ? (
-                    <Ionicons name="checkmark" size={18} color={BrandColors.orange} />
-                  ) : null}
-                </Pressable>
-              )}
-            />
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalFlex: { flex: 1 },
   field: {
     gap: 6,
   },

@@ -40,3 +40,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
 });
+
+/**
+ * Returns the credentials needed for a direct Edge Function request. Multipart
+ * uploads use Expo's fetch implementation because it can stream a native File
+ * with a correct multipart boundary on Android.
+ */
+export async function getEdgeFunctionAuth(): Promise<{
+  url: string;
+  anonKey: string;
+  accessToken: string;
+}> {
+  let { data: { session } } = await supabase.auth.getSession();
+  const expiresSoon = !session?.expires_at || session.expires_at * 1000 < Date.now() + 60_000;
+  if (session && expiresSoon) {
+    const refreshed = await supabase.auth.refreshSession();
+    session = refreshed.data.session;
+  }
+  if (!session?.access_token) throw new Error('Your session expired. Please sign in again.');
+  return {
+    url: `${supabaseUrl}/functions/v1/baymo-chat`,
+    anonKey: supabaseAnonKey,
+    accessToken: session.access_token,
+  };
+}

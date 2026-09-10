@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -88,7 +88,7 @@ export default function VideoRequestScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.section}>Type of video</Text>
         <View style={styles.pillRow}>
           {TYPES.map((t) => (
@@ -141,7 +141,7 @@ export default function VideoRequestScreen() {
           multiline
           numberOfLines={3}
         />
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button label={saving ? 'Sending…' : 'Submit request'} onPress={submit} style={{ width: '100%' }} />

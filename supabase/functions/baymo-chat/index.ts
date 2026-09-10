@@ -1,6 +1,9 @@
+// Deno resolves this URL import when the Edge Function is bundled.
+// eslint-disable-next-line import/no-unresolved
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { executeRecord, proposeRecord, type RecordAction } from './actions.ts';
 import { resolveLeadContext } from './lead-context.ts';
+import { generateBayMoSpeech } from './speech.ts';
 import { transcribeVoiceFile } from './transcription.ts';
 
 /**
@@ -31,6 +34,7 @@ const cors = {
 const OPENAI_MODEL = 'gpt-4o';
 const ANTHROPIC_MODEL = 'claude-opus-4-8';
 const MAX_TOOL_ROUNDS = 6;
+const MAX_VOICE_REQUEST_BYTES = 9 * 1024 * 1024;
 
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -531,7 +535,8 @@ Deno.serve(async (req) => {
     messages?: ChatMessage[];
     task?: 'chat' | 'document';
     document_type?: string;
-    action?: 'execute_enroll' | 'execute_record' | 'transcribe';
+    action?: 'execute_enroll' | 'execute_record' | 'transcribe' | 'speak';
+    text?: string;
     proposal?: unknown;
     lead_id?: string;
     campaign_id?: string;
@@ -541,6 +546,10 @@ Deno.serve(async (req) => {
   let voiceFile: File | null = null;
   try {
     if ((req.headers.get('Content-Type') ?? '').includes('multipart/form-data')) {
+      const contentLength = Number(req.headers.get('Content-Length') ?? 0);
+      if (contentLength > MAX_VOICE_REQUEST_BYTES) {
+        return j({ error: 'The recording is too large. Keep it under 60 seconds.' }, 413);
+      }
       const form = await req.formData();
       payload = { action: form.get('action') === 'transcribe' ? 'transcribe' : undefined };
       const audio = form.get('audio');
@@ -587,6 +596,24 @@ Deno.serve(async (req) => {
     }
     const result = await transcribeVoiceFile(voiceFile, openaiKey);
     return result.error ? j({ error: result.error }, result.status ?? 500) : j({ text: result.text });
+  }
+
+  if (payload.action === 'speak') {
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiKey) {
+      return j({ error: 'BayMo voice is not configured.' }, 500);
+    }
+    const result = await generateBayMoSpeech(payload.text, openaiKey);
+    if (result.error || !result.audio) {
+      return j({ error: result.error ?? 'BayMo could not prepare the voice reply.' }, result.status ?? 500);
+    }
+    return new Response(result.audio, {
+      headers: {
+        ...cors,
+        'Content-Type': 'audio/aac',
+        'Cache-Control': 'private, no-store',
+      },
+    });
   }
 
   if (payload.action === 'execute_record') {

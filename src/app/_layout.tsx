@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AuthProvider } from '@/contexts/auth-context';
 
@@ -64,8 +65,9 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <AuthProvider>
-      <Stack screenOptions={{ headerShown: false }}>
+    <KeyboardProvider>
+      <AuthProvider>
+        <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" />
         <Stack.Screen name="onboarding" />
@@ -95,7 +97,8 @@ export default function RootLayout() {
         <Stack.Screen name="automation-test" options={{ presentation: 'modal' }} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="profile" />
-      </Stack>
-    </AuthProvider>
+        </Stack>
+      </AuthProvider>
+    </KeyboardProvider>
   );
 }
