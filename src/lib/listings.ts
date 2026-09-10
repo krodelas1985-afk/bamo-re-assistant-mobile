@@ -28,9 +28,13 @@ type ListingRow = ListingInput & { id: string; created_at: string };
 const SELECT =
   'id, title, listing_type, property_type, price, lot_area, floor_area, bedrooms, bathrooms, location, city, description, photo_urls, status, created_at';
 
+// `published` means "the agent submitted it", NOT "it is live on the Marketplace".
+// Nothing yet copies agent_listings into the Marketplace project, so a green
+// "Live" badge would promise something that has not happened. Keep it amber
+// until a real publish path exists.
 const STATUS: Record<ListingStatus, { label: string; tone: BadgeTone }> = {
   draft: { label: 'Draft', tone: 'warm' },
-  published: { label: 'Live', tone: 'success' },
+  published: { label: 'For review', tone: 'warm' },
 };
 
 function toCard(row: ListingRow): Listing {

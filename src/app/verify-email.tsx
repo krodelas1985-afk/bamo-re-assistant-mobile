@@ -2,14 +2,12 @@ import { Image } from 'expo-image';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView, KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -72,8 +70,13 @@ export default function VerifyEmailScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        behavior="padding"
+        automaticOffset>
+        <KeyboardAwareScrollView
+          bottomOffset={24}
+          contentContainerStyle={styles.content}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
             <Image source={baymoAvatar} style={styles.baymo} contentFit="contain" />
             <Text style={styles.wordmark}>Check your email 📩</Text>
@@ -119,7 +122,7 @@ export default function VerifyEmailScreen() {
               <Text style={styles.backLink}>Use a different email</Text>
             </Pressable>
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

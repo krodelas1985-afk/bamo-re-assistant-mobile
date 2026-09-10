@@ -17,6 +17,7 @@ export type NotificationType =
   | 'appointment_reminder_hour'
   | 'task_assigned'
   | 'daily_digest'
+  | 'listing_submitted'
   | string;
 
 export type AppNotification = {

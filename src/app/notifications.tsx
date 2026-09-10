@@ -26,6 +26,8 @@ function visualFor(type: string): { icon: keyof typeof Ionicons.glyphMap; tint: 
       return { icon: 'swap-horizontal-outline', tint: BrandColors.textMuted };
     case 'appointment_reminder_hour':
       return { icon: 'alarm', tint: BrandColors.orange };
+    case 'listing_submitted':
+      return { icon: 'home', tint: BrandColors.navy };
     case 'appointment_booked':
     case 'appointment_reminder_day':
       return { icon: 'calendar', tint: BrandColors.navy };
