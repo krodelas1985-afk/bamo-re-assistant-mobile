@@ -1,5 +1,5 @@
 import { fetch as expoFetch } from 'expo/fetch';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { getEdgeFunctionAuth, supabase } from '@/lib/supabase';
@@ -134,6 +134,73 @@ export async function transcribeBayMoAudio(
       return { text: null, error: error.message };
     }
     return { text: null, error: 'Could not reach BayMo. Check your connection and try again.' };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export type BayMoSpeechAudio = {
+  uri: string;
+  cleanup: () => void;
+};
+
+/** Generates BayMo's Cedar voice and keeps the temporary audio only on this device. */
+export async function synthesizeBayMoSpeech(
+  text: string,
+): Promise<{ audio: BayMoSpeechAudio | null; error: string | null }> {
+  const spoken = text.replace(/[*_#`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 4_000);
+  if (!spoken) return { audio: null, error: 'There is no BayMo reply to read.' };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const auth = await getEdgeFunctionAuth();
+    const response = await expoFetch(auth.url, {
+      method: 'POST',
+      headers: {
+        apikey: auth.anonKey,
+        Authorization: `Bearer ${auth.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action: 'speak', text: spoken }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      let message = 'BayMo could not prepare the voice reply. Please try again.';
+      try {
+        const detail = JSON.parse(await response.text()) as { error?: unknown };
+        if (typeof detail.error === 'string') message = detail.error;
+      } catch {
+        // Keep the safe status message when a gateway returns an empty body.
+      }
+      return { audio: null, error: message };
+    }
+
+    if (Platform.OS === 'web') {
+      const uri = URL.createObjectURL(await response.blob());
+      return { audio: { uri, cleanup: () => URL.revokeObjectURL(uri) }, error: null };
+    }
+
+    const file = new File(Paths.cache, `baymo-cedar-${Date.now()}.aac`);
+    file.create({ overwrite: true });
+    file.write(await response.bytes());
+    return {
+      audio: {
+        uri: file.uri,
+        cleanup: () => {
+          if (file.exists) file.delete();
+        },
+      },
+      error: null,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { audio: null, error: 'BayMo voice took too long. Please try again.' };
+    }
+    if (error instanceof Error && error.message.includes('session expired')) {
+      return { audio: null, error: error.message };
+    }
+    return { audio: null, error: 'Could not reach BayMo voice. Check your connection and try again.' };
   } finally {
     clearTimeout(timeout);
   }

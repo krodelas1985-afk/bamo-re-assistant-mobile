@@ -1,42 +1,88 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Speech from 'expo-speech';
-import { useCallback, useEffect, useState } from 'react';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { BrandColors, Radii } from '@/constants/brand';
+import { BayMoSpeechAudio, synthesizeBayMoSpeech } from '@/lib/baymo-chat';
 
 export function useBayMoSpeech(onError: (message: string | null) => void) {
   const [speakingKey, setSpeakingKey] = useState<string | null>(null);
+  const player = useAudioPlayer(null, { updateInterval: 250 });
+  const status = useAudioPlayerStatus(player);
+  const audioRef = useRef<BayMoSpeechAudio | null>(null);
+  const requestRef = useRef(0);
+
+  const clearAudio = useCallback(() => {
+    audioRef.current?.cleanup();
+    audioRef.current = null;
+  }, []);
 
   const playSpeech = useCallback(async (key: string, text: string) => {
     if (speakingKey === key) {
-      await Speech.stop();
+      requestRef.current += 1;
+      player.pause();
+      player.replace(null);
       setSpeakingKey(null);
+      clearAudio();
       return;
     }
-    await Speech.stop();
-    const spoken = text.replace(/[*_#`]/g, '').slice(
-      0,
-      Math.min(Speech.maxSpeechInputLength, 4000),
-    );
-    if (!spoken) return;
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
+    player.pause();
+    player.replace(null);
+    clearAudio();
     onError(null);
     setSpeakingKey(key);
-    Speech.speak(spoken, {
-      language: 'en-PH',
-      rate: 0.95,
-      onDone: () => setSpeakingKey((current) => current === key ? null : current),
-      onStopped: () => setSpeakingKey((current) => current === key ? null : current),
-      onError: () => {
-        setSpeakingKey((current) => current === key ? null : current);
+    const result = await synthesizeBayMoSpeech(text);
+    if (requestRef.current !== requestId) {
+      result.audio?.cleanup();
+      return;
+    }
+    if (result.error || !result.audio) {
+      setSpeakingKey(null);
+      onError(result.error ?? 'Could not play this BayMo reply.');
+      return;
+    }
+    audioRef.current = result.audio;
+    try {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      if (requestRef.current !== requestId) {
+        clearAudio();
+        return;
+      }
+      player.replace(result.audio.uri);
+      player.play();
+    } catch {
+      if (requestRef.current === requestId) {
+        setSpeakingKey(null);
+        clearAudio();
         onError('Could not play this reply. Check your phone volume and try again.');
-      },
-    });
-  }, [onError, speakingKey]);
+      }
+    }
+  }, [clearAudio, onError, player, speakingKey]);
+
+  useEffect(() => {
+    if (!speakingKey || (!status.error && !status.didJustFinish)) return;
+
+    const completionTimer = setTimeout(() => {
+      setSpeakingKey(null);
+      player.replace(null);
+      clearAudio();
+      if (status.error) {
+        onError('Could not play this reply. Check your phone volume and try again.');
+      }
+    }, 0);
+
+    return () => clearTimeout(completionTimer);
+  }, [clearAudio, onError, player, speakingKey, status.didJustFinish, status.error]);
 
   useEffect(() => () => {
-    void Speech.stop();
-  }, []);
+    requestRef.current += 1;
+    player.pause();
+    player.replace(null);
+    clearAudio();
+  }, [clearAudio, player]);
 
   return { speakingKey, playSpeech };
 }
