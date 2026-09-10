@@ -1,51 +1,56 @@
 import { supabase } from '@/lib/supabase';
 
-/**
- * Guided "Connect my Facebook Page" requests (self-serve automations Phase 1).
- * Self-serve FB OAuth is blocked on Meta review, so the client requests the
- * connection and a BaMo admin wires the webhook manually. Rows live in
- * `page_connection_requests`; inserts notify all baymo_admins via trigger.
- */
-export type PageConnectionStatus = 'pending' | 'in_progress' | 'connected' | 'rejected';
-
-export type PageConnectionRequest = {
-  id: string;
-  pageName: string;
-  pageUrl: string | null;
-  status: PageConnectionStatus;
-  adminNotes: string | null;
-  createdAt: string;
+export type MetaConnectionState = {
+  connected: boolean;
+  connection: {
+    id: string;
+    status: string;
+    granted_scopes: string[];
+    connected_at: string | null;
+    last_verified_at: string | null;
+    revoked_at: string | null;
+  } | null;
+  page: {
+    page_id: string;
+    page_name: string;
+    page_tasks: string[];
+    subscribed_fields: string[];
+    subscription_status: string;
+    connected_at: string | null;
+    last_verified_at: string | null;
+  } | null;
 };
 
-/** Latest request for the user's workspace, or null if none was ever made. */
-export async function fetchLatestPageConnectionRequest(): Promise<PageConnectionRequest | null> {
-  const { data, error } = await supabase
-    .from('page_connection_requests')
-    .select('id, page_name, page_url, status, admin_notes, created_at')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return {
-    id: data.id,
-    pageName: data.page_name,
-    pageUrl: data.page_url,
-    status: data.status as PageConnectionStatus,
-    adminNotes: data.admin_notes,
-    createdAt: data.created_at,
-  };
+function apiUrl(path: string) {
+  const base = process.env.EXPO_PUBLIC_ADS_MANAGER_URL?.replace(/\/$/, '');
+  if (!base) throw new Error('Facebook connection is not configured in this app build.');
+  return `${base}${path}`;
 }
 
-export async function submitPageConnectionRequest(
-  clientId: string,
-  userId: string,
-  input: { pageName: string; pageUrl?: string | null },
-): Promise<{ error: string | null }> {
-  const { error } = await supabase.from('page_connection_requests').insert({
-    client_id: clientId,
-    requested_by: userId,
-    page_name: input.pageName.trim(),
-    page_url: input.pageUrl?.trim() || null,
+async function accessToken() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) throw new Error('Your session expired. Please sign in again.');
+  return data.session.access_token;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(apiUrl(path), {
+    ...init,
+    headers: { Authorization: `Bearer ${await accessToken()}`, Accept: 'application/json', ...init?.headers },
   });
-  return { error: error ? error.message : null };
+  const body = (await response.json().catch(() => null)) as ({ error?: string } & T) | null;
+  if (!response.ok) throw new Error(body?.error || 'Facebook connection could not be updated.');
+  return body as T;
+}
+
+export function fetchMetaConnection() {
+  return request<MetaConnectionState>('/api/auth/meta/connection');
+}
+
+export function startMetaConnection() {
+  return request<{ login_url: string; expires_at: string }>('/api/auth/meta/client-login', { method: 'POST' });
+}
+
+export function disconnectMetaConnection() {
+  return request<{ disconnected: true; unsubscribe_verified: boolean }>('/api/auth/meta/connection', { method: 'DELETE' });
 }

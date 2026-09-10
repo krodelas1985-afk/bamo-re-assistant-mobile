@@ -4,10 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
-import {
-  PageConnectionRequest,
-  fetchLatestPageConnectionRequest,
-} from '@/lib/page-connection';
+import { fetchMetaConnection } from '@/lib/page-connection';
 
 /**
  * New-user funnel shown when a workspace has zero leads: connect the Facebook
@@ -16,15 +13,13 @@ import {
  */
 export function LeadsEmptyState({ pageConnected }: { pageConnected: boolean }) {
   const router = useRouter();
-  const [request, setRequest] = useState<PageConnectionRequest | null>(null);
+  const [oauthConnected, setOauthConnected] = useState(false);
 
   useEffect(() => {
-    if (!pageConnected) fetchLatestPageConnectionRequest().then(setRequest);
+    if (!pageConnected) fetchMetaConnection().then((state) => setOauthConnected(state.connected)).catch(() => {});
   }, [pageConnected]);
 
-  const connectDone = pageConnected || request?.status === 'connected';
-  const connectPending =
-    !connectDone && (request?.status === 'pending' || request?.status === 'in_progress');
+  const connectDone = pageConnected || oauthConnected;
 
   return (
     <View style={styles.wrap}>
@@ -39,16 +34,12 @@ export function LeadsEmptyState({ pageConnected }: { pageConnected: boolean }) {
         title={
           connectDone
             ? 'Facebook Messenger connected'
-            : connectPending
-              ? 'Connecting your Facebook Page…'
-              : 'Connect Facebook Messenger'
+            : 'Connect Facebook Messenger'
         }
         body={
           connectDone
             ? 'New messages on your Page become leads here automatically.'
-            : connectPending
-              ? 'Request received — tap to see the steps and status.'
-              : 'This is where your leads come from. Takes a few minutes to set up.'
+            : 'This is where your leads come from. Takes about two minutes to set up.'
         }
         done={connectDone}
         onPress={() => router.push('/connect-page')}
