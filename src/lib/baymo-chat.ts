@@ -94,7 +94,11 @@ export async function transcribeBayMoAudio(
       if (!audio.exists || audio.size < 100) {
         return { text: null, error: 'No recording was created. Please record again.' };
       }
-      body.append('audio', audio, audio.name || 'baymo-voice.m4a');
+      // Some Android devices expose Expo's valid MPEG-4 recording with a
+      // generated name that has no extension. Give the multipart upload a
+      // stable extension so the Edge Function and transcription provider can
+      // identify the recording correctly.
+      body.append('audio', audio, 'baymo-voice.m4a');
     }
     const auth = await getEdgeFunctionAuth();
     const response = await expoFetch(auth.url, {
@@ -162,7 +166,7 @@ export async function synthesizeBayMoSpeech(
         Authorization: `Bearer ${auth.accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ action: 'speak', text: spoken }),
+      body: JSON.stringify({ action: 'speak', text: spoken, audio_format: 'mp3' }),
       signal: controller.signal,
     });
     if (!response.ok) {
@@ -181,7 +185,7 @@ export async function synthesizeBayMoSpeech(
       return { audio: { uri, cleanup: () => URL.revokeObjectURL(uri) }, error: null };
     }
 
-    const file = new File(Paths.cache, `baymo-cedar-${Date.now()}.aac`);
+    const file = new File(Paths.cache, `baymo-cedar-${Date.now()}.mp3`);
     file.create({ overwrite: true });
     file.write(await response.bytes());
     return {

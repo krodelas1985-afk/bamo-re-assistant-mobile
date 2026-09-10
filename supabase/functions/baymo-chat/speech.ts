@@ -1,6 +1,7 @@
 const SPEECH_MODEL = 'gpt-4o-mini-tts-2025-12-15';
 const BAYMO_VOICE = 'cedar';
 const MAX_SPEECH_CHARACTERS = 4_000;
+export type BayMoSpeechFormat = 'aac' | 'mp3';
 
 const BAYMO_VOICE_INSTRUCTIONS =
   'Speak as a warm and confident Filipino real-estate virtual assistant from Metro Manila. ' +
@@ -19,6 +20,7 @@ export async function generateBayMoSpeech(
   value: unknown,
   openaiKey: string,
   fetcher: typeof fetch = fetch,
+  responseFormat: BayMoSpeechFormat = 'aac',
 ): Promise<{ audio?: ArrayBuffer; error?: string; status?: number }> {
   const input = prepareSpeechText(value);
   if (!input) return { error: 'There is no BayMo reply to read.', status: 400 };
@@ -35,7 +37,7 @@ export async function generateBayMoSpeech(
         voice: BAYMO_VOICE,
         input,
         instructions: BAYMO_VOICE_INSTRUCTIONS,
-        response_format: 'aac',
+        response_format: responseFormat,
         speed: 1,
       }),
     });
