@@ -30,6 +30,7 @@ test('accepts BaMo recording formats and rejects empty, oversized, or unrelated 
   assert.equal(validateVoiceFile(recording()), null);
   assert.equal(validateVoiceFile(recording(new Uint8Array(200), 'audio/webm')), null);
   assert.equal(validateVoiceFile(recording(new Uint8Array(200), 'audio/webm;codecs=opus')), null);
+  assert.equal(validateVoiceFile(recording(new Uint8Array(200), '')), null);
   assert.match(validateVoiceFile(null), /required/);
   assert.match(validateVoiceFile(recording(new Uint8Array(10))), /empty/);
   assert.match(validateVoiceFile(recording(new Uint8Array(8 * 1024 * 1024 + 1))), /too large/);
@@ -78,21 +79,76 @@ test('returns useful errors without exposing provider details', async () => {
 });
 
 test('mobile client sends a reviewed recording through the authenticated function', async () => {
-  let invocation;
+  let request;
   const { transcribeBayMoAudio } = load('src/lib/baymo-chat.ts', {
+    'expo/fetch': {
+      fetch: async (url, options) => {
+        request = { url, options };
+        return new Response(JSON.stringify({ text: 'Call Joanna tomorrow' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    },
+    'expo-file-system': { File: class {} },
+    'react-native': { Platform: { OS: 'web' } },
     '@/lib/supabase': {
-      supabase: { functions: { invoke: async (name, options) => {
-        invocation = { name, options };
-        return { data: { text: 'Call Joanna tomorrow' }, error: null };
-      } } },
+      getEdgeFunctionAuth: async () => ({
+        url: 'https://example.supabase.co/functions/v1/baymo-chat',
+        anonKey: 'anon-key',
+        accessToken: 'access-token',
+      }),
+      supabase: {},
     },
   });
   const result = await transcribeBayMoAudio(
     'data:audio/webm;base64,' + Buffer.from(new Uint8Array(200)).toString('base64'),
-    true,
   );
   assert.deepEqual(result, { text: 'Call Joanna tomorrow', error: null });
-  assert.equal(invocation.name, 'baymo-chat');
-  assert.equal(invocation.options.body.get('action'), 'transcribe');
-  assert.equal(invocation.options.body.get('audio').type, 'audio/webm');
+  assert.equal(request.url, 'https://example.supabase.co/functions/v1/baymo-chat');
+  assert.equal(request.options.headers.Authorization, 'Bearer access-token');
+  assert.equal(request.options.headers.apikey, 'anon-key');
+  assert.equal(request.options.body.get('action'), 'transcribe');
+  assert.equal(request.options.body.get('audio').type, 'audio/webm');
+});
+
+test('Android client uploads an Expo File instead of a React Native uri object', async () => {
+  let request;
+  class MockExpoFile extends Blob {
+    constructor(uri) {
+      super([new Uint8Array(200)], { type: 'audio/mp4' });
+      this.uri = uri;
+      this.name = 'recording.m4a';
+      this.exists = true;
+    }
+  }
+  const { transcribeBayMoAudio } = load('src/lib/baymo-chat.ts', {
+    'expo/fetch': {
+      fetch: async (url, options) => {
+        request = { url, options };
+        return new Response(JSON.stringify({ text: 'Mag schedule tayo bukas' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    },
+    'expo-file-system': { File: MockExpoFile },
+    'react-native': { Platform: { OS: 'android' } },
+    '@/lib/supabase': {
+      getEdgeFunctionAuth: async () => ({
+        url: 'https://example.supabase.co/functions/v1/baymo-chat',
+        anonKey: 'anon-key',
+        accessToken: 'access-token',
+      }),
+      supabase: {},
+    },
+  });
+  assert.deepEqual(await transcribeBayMoAudio('file:///cache/recording.m4a'), {
+    text: 'Mag schedule tayo bukas',
+    error: null,
+  });
+  const uploaded = request.options.body.get('audio');
+  assert.equal(uploaded.name, 'recording.m4a');
+  assert.equal(uploaded.type, 'audio/mp4');
+  assert.equal(uploaded.size, 200);
 });

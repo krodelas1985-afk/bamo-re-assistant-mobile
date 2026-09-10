@@ -5,11 +5,11 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -91,7 +91,7 @@ export default function ConnectPageScreen() {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.lede}>
           BayMo answers the people who message your Facebook Page — and turns them into leads
           here. Connecting your Page is how the leads start flowing.
@@ -144,7 +144,7 @@ export default function ConnectPageScreen() {
           Full access is required by Facebook for message delivery — BaMo only uses it to run
           BayMo on your Page.
         </Text>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {showForm && (
         <View style={styles.footer}>

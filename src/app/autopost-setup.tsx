@@ -5,11 +5,11 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -183,7 +183,7 @@ export default function AutopostSetupScreen() {
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {/* Progress */}
             <View style={styles.progressRow}>
               {[0, 1, 2, 3].map((i) => (
@@ -251,7 +251,7 @@ export default function AutopostSetupScreen() {
                 numberOfLines={3}
               />
             )}
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
           <View style={styles.footer}>
             {step > 0 && (

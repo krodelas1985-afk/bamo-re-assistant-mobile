@@ -4,8 +4,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,9 +11,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { NotificationBell } from '@/components/notification-bell';
+import { BayMoSpeechButton, useBayMoSpeech } from '@/components/baymo-speech';
+import { ChatVoiceButton } from '@/components/chat-voice-button';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, BrandFonts, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import { AppNotification, fetchAttentionFlags, markNotificationRead } from '@/lib/notifications';
@@ -35,11 +36,36 @@ function greetingForNow(): string {
 }
 
 /** One assistant "message": avatar gutter + bubble-shaped content. */
-function BayMoRow({ children, tinted = false }: { children: React.ReactNode; tinted?: boolean }) {
+function BayMoRow({
+  children,
+  tinted = false,
+  speechKey,
+  speechText,
+  speakingKey,
+  disabled,
+  onSpeak,
+}: {
+  children: React.ReactNode;
+  tinted?: boolean;
+  speechKey?: string;
+  speechText?: string;
+  speakingKey?: string | null;
+  disabled?: boolean;
+  onSpeak?: (key: string, text: string) => void;
+}) {
   return (
     <View style={rowStyles.row}>
       <Image source={baymoHead} style={rowStyles.avatar} contentFit="cover" />
-      <View style={[rowStyles.bubble, tinted && rowStyles.bubbleTinted]}>{children}</View>
+      <View style={[rowStyles.bubble, tinted && rowStyles.bubbleTinted]}>
+        {children}
+        {!!speechKey && !!speechText && !!onSpeak && (
+          <BayMoSpeechButton
+            speaking={speakingKey === speechKey}
+            disabled={disabled}
+            onPress={() => onSpeak(speechKey, speechText)}
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -74,6 +100,11 @@ export default function HomeScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState(false);
+  const { speakingKey, playSpeech } = useBayMoSpeech(setVoiceError);
+  const interactionBusy = sending || voiceBusy;
 
   useFocusEffect(
     useCallback(() => {
@@ -121,12 +152,19 @@ export default function HomeScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
 
   const send = useCallback(
-    async (text: string, task: QuickAction['task'] = 'chat', documentType?: string) => {
+    async (
+      text: string,
+      task: QuickAction['task'] = 'chat',
+      documentType?: string,
+      speakReply = false,
+    ) => {
       const trimmed = text.trim();
       if (!trimmed || sending) return;
       const history: ChatMessage[] = messages.map((m) => ({ role: m.role, content: m.content }));
       setMessages((prev) => [...prev, { role: 'user', content: trimmed }]);
       setInput('');
+      setVoiceDraft(false);
+      setVoiceError(null);
       setSending(true);
       scrollToEnd();
       const { reply, error } = await sendToBayMo(
@@ -134,17 +172,14 @@ export default function HomeScreen() {
         task,
         documentType,
       );
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: error ? `Sorry, may problema — ${error}. Pakisubukan ulit.` : reply || '…',
-        },
-      ]);
+      const replyContent = error ? `Sorry, may problema — ${error}. Pakisubukan ulit.` : reply || '…';
+      const replyKey = `message:${history.length + 1}`;
+      setMessages((prev) => [...prev, { role: 'assistant', content: replyContent }]);
+      if (speakReply && !error) void playSpeech(replyKey, replyContent);
       setSending(false);
       scrollToEnd();
     },
-    [messages, sending],
+    [messages, sending, playSpeech],
   );
 
   const finishTask = async (id: string) => {
@@ -178,11 +213,16 @@ export default function HomeScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={8}>
+        behavior="padding"
+        automaticOffset>
         <ScrollView ref={scrollRef} contentContainerStyle={styles.feed}>
           {/* Greeting */}
-          <BayMoRow>
+          <BayMoRow
+            speechKey="greeting"
+            speechText={`${greetingForNow()}, ${displayName}! Kumusta? Here's where we are today. Ask me anything or tap a shortcut below.`}
+            speakingKey={speakingKey}
+            disabled={interactionBusy}
+            onSpeak={playSpeech}>
             <Text style={styles.greeting}>
               {greetingForNow()}, {displayName}! 👋
             </Text>
@@ -205,7 +245,6 @@ export default function HomeScreen() {
                       onPress={() => {
                         if (f.route) {
                           markNotificationRead(f.id);
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           router.push(f.route as any);
                         }
                       }}>
@@ -221,13 +260,27 @@ export default function HomeScreen() {
                     </Pressable>
                   </View>
                 ))}
+                <BayMoSpeechButton
+                  speaking={speakingKey === 'attention-flags'}
+                  disabled={interactionBusy}
+                  onPress={() => void playSpeech(
+                    'attention-flags',
+                    `Kailangan mo itong tingnan. ${flags.map((flag) => `${flag.title}. ${flag.body ?? ''}`).join('. ')}`,
+                  )}
+                />
               </View>
             </View>
           )}
 
           {/* Today's update */}
           {updateLine ? (
-            <BayMoRow tinted>
+            <BayMoRow
+              tinted
+              speechKey="today-update"
+              speechText={updateLine}
+              speakingKey={speakingKey}
+              disabled={interactionBusy}
+              onSpeak={playSpeech}>
               <Text style={styles.bodyText}>{updateLine}</Text>
               {digest ? (
                 <Text style={styles.metaText}>
@@ -241,7 +294,12 @@ export default function HomeScreen() {
 
           {/* Leads that need attention */}
           {attentionCount !== null && (
-            <BayMoRow>
+            <BayMoRow
+              speechKey="lead-summary"
+              speechText={`${attentionCount > 0 ? `${attentionCount} leads need your attention.` : 'No leads are waiting on you right now.'} ${suggestions.map((s) => `${s.name}: ${s.reason}`).join('. ')}`}
+              speakingKey={speakingKey}
+              disabled={interactionBusy}
+              onSpeak={playSpeech}>
               <Text style={styles.cardTitle}>
                 {attentionCount > 0
                   ? `🔥 ${attentionCount} lead${attentionCount === 1 ? '' : 's'} need${attentionCount === 1 ? 's' : ''} your attention`
@@ -270,7 +328,14 @@ export default function HomeScreen() {
 
           {/* Today's tasks */}
           {tasks !== null && (
-            <BayMoRow>
+            <BayMoRow
+              speechKey="task-summary"
+              speechText={tasks.length > 0
+                ? `Your tasks for today are: ${tasks.map((task) => `${task.title}, ${dueLabel(task)}`).join('. ')}`
+                : 'All clear for today. Walang pending tasks.'}
+              speakingKey={speakingKey}
+              disabled={interactionBusy}
+              onSpeak={playSpeech}>
               <Text style={styles.cardTitle}>
                 {tasks.length > 0
                   ? `📋 Your tasks for today (${tasks.length})`
@@ -304,7 +369,12 @@ export default function HomeScreen() {
 
           {/* Announcements */}
           {announcements.length > 0 && (
-            <BayMoRow>
+            <BayMoRow
+              speechKey="announcements"
+              speechText={`Heads up from BaMo. ${announcements.map((item) => `${item.title}. ${item.body ?? ''}`).join('. ')}`}
+              speakingKey={speakingKey}
+              disabled={interactionBusy}
+              onSpeak={playSpeech}>
               <Text style={styles.cardTitle}>📣 Heads up from BaMo</Text>
               {announcements.map((a) => (
                 <View key={a.id} style={{ gap: 2 }}>
@@ -325,7 +395,13 @@ export default function HomeScreen() {
           {/* Live conversation */}
           {messages.map((m, i) =>
             m.role === 'assistant' ? (
-              <BayMoRow key={i}>
+              <BayMoRow
+                key={i}
+                speechKey={`message:${i}`}
+                speechText={m.content}
+                speakingKey={speakingKey}
+                disabled={interactionBusy}
+                onSpeak={playSpeech}>
                 <Text style={styles.bodyText}>{m.content}</Text>
               </BayMoRow>
             ) : (
@@ -350,7 +426,8 @@ export default function HomeScreen() {
               {QUICK_ACTIONS.map((qa) => (
                 <Pressable
                   key={qa.label}
-                  style={styles.quickPill}
+                  disabled={interactionBusy}
+                  style={[styles.quickPill, interactionBusy && styles.controlDisabled]}
                   onPress={() => send(qa.prompt, qa.task, qa.documentType)}>
                   <Text style={styles.quickPillText}>{qa.label}</Text>
                 </Pressable>
@@ -358,20 +435,38 @@ export default function HomeScreen() {
             </View>
           </ScrollView>
         </View>
+        {!!voiceError && (
+          <Text accessibilityLiveRegion="polite" style={styles.voiceError}>{voiceError}</Text>
+        )}
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
             value={input}
-            onChangeText={setInput}
+            onChangeText={(value) => {
+              setInput(value);
+              setVoiceError(null);
+              if (!value.trim()) setVoiceDraft(false);
+            }}
             placeholder="Message BayMo…"
             placeholderTextColor={BrandColors.textMuted}
             multiline
-            onSubmitEditing={() => send(input)}
+            editable={!interactionBusy}
+            onSubmitEditing={() => send(input, 'chat', undefined, voiceDraft)}
+          />
+          <ChatVoiceButton
+            disabled={sending}
+            onBusyChange={setVoiceBusy}
+            onError={setVoiceError}
+            onTranscript={(text) => {
+              setInput(text);
+              setVoiceDraft(true);
+              setVoiceError(null);
+            }}
           />
           <Pressable
-            onPress={() => send(input)}
-            disabled={sending || !input.trim()}
-            style={[styles.sendBtn, (sending || !input.trim()) && styles.sendBtnDisabled]}>
+            onPress={() => send(input, 'chat', undefined, voiceDraft)}
+            disabled={interactionBusy || !input.trim()}
+            style={[styles.sendBtn, (interactionBusy || !input.trim()) && styles.sendBtnDisabled]}>
             <Ionicons name="arrow-up" size={18} color={BrandColors.white} />
           </Pressable>
         </View>
@@ -503,6 +598,13 @@ const styles = StyleSheet.create({
     borderRadius: Radii.pill,
   },
   quickPillText: { ...TypeScale.label, color: BrandColors.ink },
+  controlDisabled: { opacity: 0.45 },
+  voiceError: {
+    ...TypeScale.helper,
+    color: BrandColors.error,
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+  },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',

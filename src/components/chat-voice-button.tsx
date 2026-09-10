@@ -7,7 +7,7 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 
 import { BrandColors, Radii } from '@/constants/brand';
 import { transcribeBayMoAudio } from '@/lib/baymo-chat';
@@ -48,7 +48,7 @@ export function ChatVoiceButton({
     try {
       await recorder.stop();
       if (!recorder.uri) throw new Error('No recording was created. Please try again.');
-      const result = await transcribeBayMoAudio(recorder.uri, Platform.OS === 'web');
+      const result = await transcribeBayMoAudio(recorder.uri);
       if (!mountedRef.current) return;
       if (result.error || !result.text) throw new Error(result.error ?? 'No speech was detected.');
       onTranscript(result.text);

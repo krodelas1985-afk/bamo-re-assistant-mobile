@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -125,7 +126,7 @@ function LeadForm({initialLeadId}: {initialLeadId?: string}) {
         <View style={{ width: 26 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {prefillLoading && <Text style={styles.fieldLabel}>Loading selected lead…</Text>}
         {prefillError && <Text style={[styles.fieldLabel, { color: BrandColors.error }]}>{prefillError}</Text>}
         <Text style={styles.fieldLabel}>Type</Text>
@@ -191,7 +192,7 @@ function LeadForm({initialLeadId}: {initialLeadId?: string}) {
         {!clientId && (
           <Text style={styles.warn}>Your workspace isn&apos;t linked yet, so saving is disabled. Finish onboarding first.</Text>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
         <Button label={saving ? 'Saving…' : 'Save to calendar'} onPress={save} style={styles.footerBtn} />
