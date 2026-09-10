@@ -537,6 +537,7 @@ Deno.serve(async (req) => {
     document_type?: string;
     action?: 'execute_enroll' | 'execute_record' | 'transcribe' | 'speak';
     text?: string;
+    audio_format?: 'mp3';
     proposal?: unknown;
     lead_id?: string;
     campaign_id?: string;
@@ -603,14 +604,15 @@ Deno.serve(async (req) => {
     if (!openaiKey) {
       return j({ error: 'BayMo voice is not configured.' }, 500);
     }
-    const result = await generateBayMoSpeech(payload.text, openaiKey);
+    const audioFormat = payload.audio_format === 'mp3' ? 'mp3' : 'aac';
+    const result = await generateBayMoSpeech(payload.text, openaiKey, fetch, audioFormat);
     if (result.error || !result.audio) {
       return j({ error: result.error ?? 'BayMo could not prepare the voice reply.' }, result.status ?? 500);
     }
     return new Response(result.audio, {
       headers: {
         ...cors,
-        'Content-Type': 'audio/aac',
+        'Content-Type': audioFormat === 'mp3' ? 'audio/mpeg' : 'audio/aac',
         'Cache-Control': 'private, no-store',
       },
     });

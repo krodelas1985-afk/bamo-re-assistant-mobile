@@ -46,12 +46,17 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
     }
     audioRef.current = result.audio;
     try {
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        shouldRouteThroughEarpiece: false,
+      });
       if (requestRef.current !== requestId) {
         clearAudio();
         return;
       }
       player.replace(result.audio.uri);
+      player.volume = 1;
       player.play();
     } catch {
       if (requestRef.current === requestId) {

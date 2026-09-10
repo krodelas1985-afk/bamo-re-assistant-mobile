@@ -119,13 +119,13 @@ test('mobile client sends a reviewed recording through the authenticated functio
   assert.equal(request.options.body.get('audio').type, 'audio/webm');
 });
 
-test('Android client uploads an Expo File instead of a React Native uri object', async () => {
+test('Android client gives an extensionless Expo recording a stable M4A upload name', async () => {
   let request;
   class MockExpoFile extends Blob {
     constructor(uri) {
       super([new Uint8Array(200)], { type: 'audio/mp4' });
       this.uri = uri;
-      this.name = 'recording.m4a';
+      this.name = 'recording';
       this.exists = true;
     }
   }
@@ -155,7 +155,7 @@ test('Android client uploads an Expo File instead of a React Native uri object',
     error: null,
   });
   const uploaded = request.options.body.get('audio');
-  assert.equal(uploaded.name, 'recording.m4a');
+  assert.equal(uploaded.name, 'baymo-voice.m4a');
   assert.equal(uploaded.type, 'audio/mp4');
   assert.equal(uploaded.size, 200);
 });
@@ -166,9 +166,9 @@ test('BayMo speech is pinned to Cedar with the approved Filipino direction', asy
     request = { url, options };
     return new Response(new Uint8Array([1, 2, 3]), {
       status: 200,
-      headers: { 'Content-Type': 'audio/aac' },
+      headers: { 'Content-Type': 'audio/mpeg' },
     });
-  });
+  }, 'mp3');
   assert.equal(request.url, 'https://api.openai.com/v1/audio/speech');
   const body = JSON.parse(request.options.body);
   assert.equal(body.model, 'gpt-4o-mini-tts-2025-12-15');
@@ -176,7 +176,7 @@ test('BayMo speech is pinned to Cedar with the approved Filipino direction', asy
   assert.equal(body.input, 'Kumusta! Viewing tayo bukas.');
   assert.match(body.instructions, /Filipino real-estate virtual assistant/);
   assert.match(body.instructions, /Taglish cadence/);
-  assert.equal(body.response_format, 'aac');
+  assert.equal(body.response_format, 'mp3');
   assert.equal(result.audio.byteLength, 3);
   assert.equal(BAYMO_SPEECH_CONFIG.voice, 'cedar');
   assert.equal(prepareSpeechText('  ## Hello   there '), 'Hello there');
@@ -188,6 +188,15 @@ test('BayMo speech returns safe errors when the provider fails', async () => {
   assert.equal(rejected.status, 502);
   assert.match(rejected.error, /could not prepare/);
   assert.equal(await prepareSpeechText('   '), null);
+});
+
+test('older APKs continue receiving the original AAC speech format', async () => {
+  let requestedFormat;
+  await generateBayMoSpeech('Hello', 'test-key', async (_url, options) => {
+    requestedFormat = JSON.parse(options.body).response_format;
+    return new Response(new Uint8Array([1]), { status: 200 });
+  });
+  assert.equal(requestedFormat, 'aac');
 });
 
 test('Android stores Cedar audio in temporary cache and deletes it after playback', async () => {
@@ -230,8 +239,9 @@ test('Android stores Cedar audio in temporary cache and deletes it after playbac
   assert.deepEqual(JSON.parse(request.options.body), {
     action: 'speak',
     text: 'Call Edz tomorrow.',
+    audio_format: 'mp3',
   });
-  assert.match(result.audio.uri, /baymo-cedar-\d+\.aac$/);
+  assert.match(result.audio.uri, /baymo-cedar-\d+\.mp3$/);
   assert.deepEqual([...createdFile.bytes], [7, 8, 9]);
   result.audio.cleanup();
   assert.equal(createdFile.deleted, true);
