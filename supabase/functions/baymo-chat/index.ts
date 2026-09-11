@@ -555,6 +555,12 @@ Deno.serve(async (req) => {
       payload = { action: form.get('action') === 'transcribe' ? 'transcribe' : undefined };
       const audio = form.get('audio');
       voiceFile = audio instanceof File ? audio : null;
+      if (!voiceFile) {
+        // A 400 here is indistinguishable from "the mic is broken" on the phone.
+        console.log('BayMo transcribe: audio part is not a file', JSON.stringify({
+          received: audio === null ? 'missing' : typeof audio,
+        }));
+      }
     } else {
       payload = await req.json();
     }
@@ -595,7 +601,15 @@ Deno.serve(async (req) => {
     if (!openaiKey) {
       return j({ error: 'OPENAI_API_KEY secret is not set on this function' }, 500);
     }
+    console.log('BayMo transcribe upload', JSON.stringify({
+      name: voiceFile?.name ?? null,
+      type: voiceFile?.type ?? null,
+      size: voiceFile?.size ?? null,
+    }));
     const result = await transcribeVoiceFile(voiceFile, openaiKey);
+    if (result.error) {
+      console.log('BayMo transcribe rejected', JSON.stringify({ reason: result.error, status: result.status ?? 500 }));
+    }
     return result.error ? j({ error: result.error }, result.status ?? 500) : j({ text: result.text });
   }
 

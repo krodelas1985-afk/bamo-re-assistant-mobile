@@ -42,6 +42,14 @@ test('accepts BaMo recording formats and rejects empty, oversized, or unrelated 
   assert.match(validateVoiceFile(recording(new Uint8Array(10))), /empty/);
   assert.match(validateVoiceFile(recording(new Uint8Array(8 * 1024 * 1024 + 1))), /too large/);
   assert.match(validateVoiceFile(recording(new Uint8Array(200), 'text/plain')), /not supported/);
+  // Android OEMs label the same MPEG-4/AAC recording inconsistently; each of
+  // these was a 400 that read on the phone as "the microphone is broken".
+  assert.equal(validateVoiceFile(recording(new Uint8Array(200), 'audio/aac')), null);
+  assert.equal(validateVoiceFile(recording(new Uint8Array(200), 'video/mp4')), null);
+  assert.equal(validateVoiceFile(recording(new Uint8Array(200), 'application/octet-stream')), null);
+  // A rejection must name what arrived, or the 400 is undiagnosable remotely.
+  assert.match(validateVoiceFile(recording(new Uint8Array(200), 'text/plain')), /received "text\/plain"/);
+  assert.match(validateVoiceFile(recording(new Uint8Array(10))), /10 bytes/);
 });
 
 test('sends multipart audio to the current transcription model and returns trimmed text', async () => {

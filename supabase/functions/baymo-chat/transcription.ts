@@ -5,17 +5,42 @@ const ALLOWED_AUDIO_TYPES = new Set([
   'audio/m4a',
   'audio/x-m4a',
   'audio/webm',
+  // Android OEMs label the very same MPEG-4/AAC recording in several ways.
+  // Rejecting these produced a 400 that looked, from the phone, exactly like
+  // 'the microphone is broken'.
+  'audio/aac',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/ogg',
+  'video/mp4',
+  'audio/3gpp',
 ]);
+
+/** Extensions allowed to vouch for an unhelpful media type. */
+const ALLOWED_AUDIO_EXTENSIONS = /\.(m4a|mp4|webm|aac|mp3|wav|ogg|oga|3gp)$/;
 
 export function validateVoiceFile(value: unknown): string | null {
   if (!(value instanceof File)) return 'A voice recording is required.';
-  if (value.size < 100) return 'The recording is empty. Please record again.';
+  if (value.size < 100) return `The recording is empty (${value.size} bytes). Please record again.`;
   if (value.size > MAX_AUDIO_BYTES) return 'The recording is too large. Keep it under 60 seconds.';
+
   const mediaType = value.type.toLowerCase().split(';', 1)[0];
-  const extension = value.name.toLowerCase().match(/\.(m4a|mp4|webm)$/)?.[1];
-  const canInferType = (!mediaType || mediaType === 'application/octet-stream') && extension;
-  if (!ALLOWED_AUDIO_TYPES.has(mediaType) && !canInferType) {
-    return 'This audio format is not supported. Please record again in BaMo.';
+  const hasAudioExtension = ALLOWED_AUDIO_EXTENSIONS.test(value.name.toLowerCase());
+  // An extension may vouch for a missing or generic type, and for any audio/*
+  // or video/mp4 variant an OEM invents — but never for something plainly not
+  // audio, such as text/plain.
+  const typeIsPlausible =
+    !mediaType ||
+    mediaType === 'application/octet-stream' ||
+    mediaType.startsWith('audio/') ||
+    mediaType === 'video/mp4';
+
+  if (!ALLOWED_AUDIO_TYPES.has(mediaType) && !(hasAudioExtension && typeIsPlausible)) {
+    // Name what arrived: without it this 400 is undiagnosable from the phone.
+    return `This audio format is not supported (received "${mediaType || 'no media type'}" ` +
+      `for "${value.name || 'unnamed file'}"). Please record again in BaMo.`;
   }
   return null;
 }
