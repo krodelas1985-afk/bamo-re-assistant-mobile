@@ -10,6 +10,7 @@ import {
 } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Modal,
   Pressable,
   ScrollView,
@@ -130,6 +131,21 @@ function AccountChatScreen({
   leadId?: string;
 }) {
   const router = useRouter();
+
+  // Android back: BayMo chat can be reached from a lead, Settings, the welcome
+  // tour or the floating bubble. If this screen is the only one on the stack,
+  // expo-router reports nothing to pop and React Native finishes the activity —
+  // the app closes instead of leaving the chat. Send the agent Home instead.
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/');
+        return true;
+      });
+      return () => subscription.remove();
+    }, [router]),
+  );
   const { seed } = useLocalSearchParams<{ seed?: string }>();
   const scrollRef = useRef<ScrollView>(null);
   const store = getChatHistory(userId);
@@ -693,7 +709,6 @@ function AccountChatScreen({
                 {m.role === 'assistant' && !!m.content && (
                   <BayMoSpeechButton
                     speaking={speakingKey === `${activeId ?? 'new'}:${i}`}
-                    disabled={interactionBusy}
                     onPress={() => void playSpeech(
                       `${activeId ?? 'new'}:${i}`,
                       m.content,

@@ -19,7 +19,10 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
   }, []);
 
   const playSpeech = useCallback(async (key: string, text: string) => {
-    if (speakingKey === key) {
+    // Only a genuinely loaded reply can be stopped. Without the audioRef check a
+    // stuck speakingKey — left behind when playback never started — turned every
+    // later tap into a silent no-op that never reached the network.
+    if (speakingKey === key && audioRef.current) {
       requestRef.current += 1;
       player.pause();
       player.replace(null);

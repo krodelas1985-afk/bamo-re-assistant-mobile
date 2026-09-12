@@ -4,11 +4,14 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   ScrollView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
+  ToastAndroid,
   View,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
@@ -105,6 +108,24 @@ export default function HomeScreen() {
   const [voiceDraft, setVoiceDraft] = useState(false);
   const { speakingKey, playSpeech } = useBayMoSpeech(setVoiceError);
   const interactionBusy = sending || voiceBusy;
+  const lastBackPress = useRef(0);
+
+  // Home is both the first tab and BayMo's chat room, so there is genuinely no
+  // previous screen — Android's default is to close the app. Agents read that as
+  // "back killed my chat", so require a confirming second press.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        const now = Date.now();
+        if (now - lastBackPress.current < 2000) return false; // second press: let it exit
+        lastBackPress.current = now;
+        ToastAndroid.show('Press back again to exit BaMo', ToastAndroid.SHORT);
+        return true;
+      });
+      return () => subscription.remove();
+    }, []),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -221,7 +242,6 @@ export default function HomeScreen() {
             speechKey="greeting"
             speechText={`${greetingForNow()}, ${displayName}! Kumusta? Here's where we are today. Ask me anything or tap a shortcut below.`}
             speakingKey={speakingKey}
-            disabled={interactionBusy}
             onSpeak={playSpeech}>
             <Text style={styles.greeting}>
               {greetingForNow()}, {displayName}! 👋
@@ -262,7 +282,6 @@ export default function HomeScreen() {
                 ))}
                 <BayMoSpeechButton
                   speaking={speakingKey === 'attention-flags'}
-                  disabled={interactionBusy}
                   onPress={() => void playSpeech(
                     'attention-flags',
                     `Kailangan mo itong tingnan. ${flags.map((flag) => `${flag.title}. ${flag.body ?? ''}`).join('. ')}`,
@@ -279,7 +298,6 @@ export default function HomeScreen() {
               speechKey="today-update"
               speechText={updateLine}
               speakingKey={speakingKey}
-              disabled={interactionBusy}
               onSpeak={playSpeech}>
               <Text style={styles.bodyText}>{updateLine}</Text>
               {digest ? (
@@ -298,7 +316,6 @@ export default function HomeScreen() {
               speechKey="lead-summary"
               speechText={`${attentionCount > 0 ? `${attentionCount} leads need your attention.` : 'No leads are waiting on you right now.'} ${suggestions.map((s) => `${s.name}: ${s.reason}`).join('. ')}`}
               speakingKey={speakingKey}
-              disabled={interactionBusy}
               onSpeak={playSpeech}>
               <Text style={styles.cardTitle}>
                 {attentionCount > 0
@@ -334,7 +351,6 @@ export default function HomeScreen() {
                 ? `Your tasks for today are: ${tasks.map((task) => `${task.title}, ${dueLabel(task)}`).join('. ')}`
                 : 'All clear for today. Walang pending tasks.'}
               speakingKey={speakingKey}
-              disabled={interactionBusy}
               onSpeak={playSpeech}>
               <Text style={styles.cardTitle}>
                 {tasks.length > 0
@@ -373,7 +389,6 @@ export default function HomeScreen() {
               speechKey="announcements"
               speechText={`Heads up from BaMo. ${announcements.map((item) => `${item.title}. ${item.body ?? ''}`).join('. ')}`}
               speakingKey={speakingKey}
-              disabled={interactionBusy}
               onSpeak={playSpeech}>
               <Text style={styles.cardTitle}>📣 Heads up from BaMo</Text>
               {announcements.map((a) => (
@@ -400,7 +415,6 @@ export default function HomeScreen() {
                 speechKey={`message:${i}`}
                 speechText={m.content}
                 speakingKey={speakingKey}
-                disabled={interactionBusy}
                 onSpeak={playSpeech}>
                 <Text style={styles.bodyText}>{m.content}</Text>
               </BayMoRow>
