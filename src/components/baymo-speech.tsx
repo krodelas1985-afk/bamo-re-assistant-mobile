@@ -19,36 +19,35 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
   }, []);
 
   const playSpeech = useCallback(async (key: string, text: string) => {
-    // Only a genuinely loaded reply can be stopped. Without the audioRef check a
-    // stuck speakingKey — left behind when playback never started — turned every
-    // later tap into a silent no-op that never reached the network.
-    if (speakingKey === key && audioRef.current) {
-      requestRef.current += 1;
-      player.pause();
-      player.replace(null);
-      setSpeakingKey(null);
-      clearAudio();
-      return;
-    }
     const requestId = requestRef.current + 1;
-    requestRef.current = requestId;
-    player.pause();
-    player.replace(null);
-    clearAudio();
-    onError(null);
-    setSpeakingKey(key);
-    const result = await synthesizeBayMoSpeech(text);
-    if (requestRef.current !== requestId) {
-      result.audio?.cleanup();
-      return;
-    }
-    if (result.error || !result.audio) {
-      setSpeakingKey(null);
-      onError(result.error ?? 'Could not play this BayMo reply.');
-      return;
-    }
-    audioRef.current = result.audio;
     try {
+      // expo-audio 57.0.4 throws when replace(null) crosses the native bridge.
+      // Pausing is enough here; the next valid source replaces the old one.
+      if (speakingKey === key && audioRef.current) {
+        requestRef.current = requestId;
+        player.pause();
+        setSpeakingKey(null);
+        clearAudio();
+        return;
+      }
+
+      requestRef.current = requestId;
+      player.pause();
+      clearAudio();
+      onError(null);
+      setSpeakingKey(key);
+
+      const result = await synthesizeBayMoSpeech(text);
+      if (requestRef.current !== requestId) {
+        result.audio?.cleanup();
+        return;
+      }
+      if (result.error || !result.audio) {
+        setSpeakingKey(null);
+        onError(result.error ?? 'Could not play this BayMo reply.');
+        return;
+      }
+      audioRef.current = result.audio;
       await setAudioModeAsync({
         allowsRecording: false,
         playsInSilentMode: true,
@@ -58,8 +57,7 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
         clearAudio();
         return;
       }
-      player.replace(result.audio.uri);
-      player.volume = 1;
+      player.replace({ uri: result.audio.uri });
       player.play();
     } catch {
       if (requestRef.current === requestId) {
@@ -71,11 +69,11 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
   }, [clearAudio, onError, player, speakingKey]);
 
   useEffect(() => {
-    if (!speakingKey || (!status.error && !status.didJustFinish)) return;
+    if (!speakingKey || !audioRef.current || (!status.error && !status.didJustFinish)) return;
 
     const completionTimer = setTimeout(() => {
       setSpeakingKey(null);
-      player.replace(null);
+      player.pause();
       clearAudio();
       if (status.error) {
         onError('Could not play this reply. Check your phone volume and try again.');
@@ -88,7 +86,6 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
   useEffect(() => () => {
     requestRef.current += 1;
     player.pause();
-    player.replace(null);
     clearAudio();
   }, [clearAudio, player]);
 
