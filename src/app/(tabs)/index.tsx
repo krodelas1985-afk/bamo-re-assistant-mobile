@@ -1,9 +1,11 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   BackHandler,
   Pressable,
   ScrollView,
@@ -109,7 +111,7 @@ export default function HomeScreen() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [voiceDraft, setVoiceDraft] = useState(false);
-  const { speakingKey, playSpeech } = useBayMoSpeech(setVoiceError);
+  const { speakingKey, playSpeech, stopSpeech } = useBayMoSpeech(setVoiceError);
   const interactionBusy = sending || voiceBusy;
   const lastBackPress = useRef(0);
 
@@ -159,6 +161,54 @@ export default function HomeScreen() {
 
   const displayName =
     profile?.full_name?.split(/\s+/)[0] ?? session?.user.email?.split('@')[0] ?? 'Agent';
+
+  const [isFocused, setIsFocused] = useState(false);
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  const attemptedGreeting = useRef<string | null>(null);
+  const greetingBody = stats && tasks
+    ? `${stats.hot > 0 ? `You have ${stats.hot} hot ${stats.hot === 1 ? 'lead' : 'leads'} to follow up with. ` : ''}${tasks.length > 0 ? `There ${tasks.length === 1 ? 'is 1 task' : `are ${tasks.length} tasks`} waiting for your attention. ` : ''}How can I help you today?`
+    : 'How can I help you today?';
+  const greetingText = `${greetingForNow()}, ${displayName}! ${greetingBody}`;
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
+      if (state !== 'active') stopSpeech();
+    });
+    return () => subscription.remove();
+  }, [stopSpeech]);
+  useFocusEffect(useCallback(() => {
+    setIsFocused(true);
+    return () => { setIsFocused(false); stopSpeech(); };
+  }, [stopSpeech]));
+  const handleVoiceBusy = useCallback((busy: boolean) => {
+    if (busy) stopSpeech();
+    setVoiceBusy(busy);
+  }, [stopSpeech]);
+
+  useEffect(() => {
+    if (!isFocused || !appActive || !session?.user.id || !stats || !tasks || interactionBusy || speakingKey || input) return;
+    const now = new Date();
+    const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    const key = `baymo:dashboard-greeting:${session.user.id}`;
+    const attempt = `${key}:${day}`;
+    if (attemptedGreeting.current === attempt) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const lastDay = await AsyncStorage.getItem(key);
+        if (cancelled) return;
+        attemptedGreeting.current = attempt;
+        if (lastDay === day) return;
+        // Persist the attempt so failed audio cannot cause repeated greetings.
+        await AsyncStorage.setItem(key, day);
+        if (!cancelled) void playSpeech('greeting', greetingText);
+      } catch {
+        attemptedGreeting.current = attempt;
+      }
+    }, 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [appActive, greetingText, input, interactionBusy, isFocused, playSpeech, session?.user.id, speakingKey, stats, tasks]);
 
   // "Needs your attention" = Hot leads only (the ones worth calling today).
   // Warm/ready leads live under the Leads tab, not as an alarming Home count.
@@ -244,14 +294,15 @@ export default function HomeScreen() {
           <BayMoRow
             tinted
             speechKey="greeting"
-            speechText={`${greetingForNow()}, ${displayName}! Let's make time for what matters today.`}
+            speechText={greetingText}
+            disabled={interactionBusy}
             speakingKey={speakingKey}
             onSpeak={playSpeech}>
             <Text style={styles.greeting}>
               {greetingForNow()}, {displayName}!
             </Text>
             <Text style={styles.bodyText}>
-              Let&apos;s make time for what matters today.
+              {greetingBody}
             </Text>
           </BayMoRow>
 
@@ -476,7 +527,7 @@ export default function HomeScreen() {
           />
           <ChatVoiceButton
             disabled={sending}
-            onBusyChange={setVoiceBusy}
+            onBusyChange={handleVoiceBusy}
             onError={setVoiceError}
             onTranscript={(text) => {
               setInput(text);

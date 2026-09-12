@@ -26,3 +26,11 @@ Applied on feature/bamo-brand-redesign, based on 76c7e84 (v1.0.5 fixes).
 ## Release boundary
 
 No backend/data-layer changes, Supabase migrations, Edge Function deployments, merges, or APK builds are included. Before release, check Android/iOS with native keyboard open, larger system text, tabs/back navigation, Cedar playback and recording; confirm task/appointment review controls remain reachable.
+
+## Version 1.0.6 Dashboard voice greeting
+
+On the first eligible Dashboard visit each local calendar day, BayMo greets the signed-in agent by name using the existing Cedar speech service, mentions loaded hot leads and tasks, and asks how it can help. The same text appears in the greeting card. Attempts are saved per account on this device; failed audio is not automatically retried, and the speaker allows manual replay. No database or Edge Function changes are required.
+
+Autoplay waits for Dashboard data and an idle foreground screen. Navigating away, backgrounding, or starting microphone capture stops playback and invalidates pending speech. The stop button also cancels speech that is still loading.
+
+Validation: TypeScript and lint for changed voice/Dashboard files pass; all 33 history, action, context and voice tests pass, including cancellation of pending audio. Native device playback and the daily greeting still require APK smoke testing. Existing unrelated lint errors are documented above.
