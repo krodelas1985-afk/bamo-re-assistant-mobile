@@ -322,3 +322,33 @@ test('speaker reaches Cedar playback when expo-audio rejects replace(null)', asy
   assert.equal(played, true);
   assert.deepEqual(errors, []);
 });
+
+test('leaving Dashboard while Cedar is loading cancels playback and cleans the late audio', async () => {
+  let resolveSpeech;
+  let played = false;
+  let cleaned = false;
+  const pending = new Promise((resolve) => { resolveSpeech = resolve; });
+  const { useBayMoSpeech } = loadTsx('src/components/baymo-speech.tsx', {
+    '@expo/vector-icons': { Ionicons() {} },
+    'expo-audio': {
+      setAudioModeAsync: async () => {},
+      useAudioPlayer: () => ({ pause() {}, replace() {}, play() { played = true; } }),
+      useAudioPlayerStatus: () => ({}),
+    },
+    react: {
+      useCallback: (callback) => callback, useEffect() {},
+      useRef: (current) => ({ current }), useState: (initial) => [initial, () => {}],
+    },
+    'react/jsx-runtime': { jsx() {}, jsxs() {} },
+    'react-native': { Pressable() {}, StyleSheet: { create: (styles) => styles } },
+    '@/constants/brand': { BrandColors: {}, Radii: {} },
+    '@/lib/baymo-chat': { synthesizeBayMoSpeech: () => pending },
+  });
+  const { playSpeech, stopSpeech } = useBayMoSpeech(() => {});
+  const playback = playSpeech('greeting', 'Magandang umaga!');
+  stopSpeech();
+  resolveSpeech({ audio: { uri: 'file:///greeting.mp3', cleanup() { cleaned = true; } } });
+  await playback;
+  assert.equal(played, false);
+  assert.equal(cleaned, true);
+});

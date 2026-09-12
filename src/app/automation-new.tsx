@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BrandColors.border,
   },
-  headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
+  headerTitle: { ...TypeScale.h3, color: BrandColors.textHeading, flexShrink: 1 },
   stepCount: { ...TypeScale.label, color: BrandColors.textMuted, width: 26, textAlign: 'right' },
   dots: {
     flexDirection: 'row',
@@ -589,11 +589,11 @@ const styles = StyleSheet.create({
   },
   dot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: BrandColors.border },
   dotActive: { backgroundColor: BrandColors.orange },
-  content: { padding: 16, gap: 10, paddingBottom: 32 },
+  content: { padding: 20, gap: 18, paddingBottom: 40 },
   question: { ...TypeScale.h3, color: BrandColors.textHeading },
   section: { ...TypeScale.h4, color: BrandColors.textHeading, marginTop: 8 },
   hint: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
-  warn: { ...TypeScale.bodySmall, color: BrandColors.orange },
+  warn: { ...TypeScale.bodySmall, color: BrandColors.orangeDark },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
   choice: {
     flexDirection: 'row',

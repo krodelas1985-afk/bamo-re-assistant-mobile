@@ -19,7 +19,7 @@ import {
 } from '@/lib/onboarding';
 import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 
-const baymoAvatar = require('../../assets/brand/baymo.png');
+const baymoAvatar = require('../../assets/brand/baymo-head.png');
 
 const BUSINESS_TYPES: { value: BusinessType; label: string; sub: string }[] = [
   { value: 'individual', label: 'Solo Agent', sub: 'I sell on my own' },
@@ -181,9 +181,9 @@ export default function OnboardingScreen() {
             <View style={styles.heroRow}>
               <Image source={baymoAvatar} style={styles.baymo} contentFit="contain" />
               <View style={styles.flex}>
-                <Text style={styles.title}>Kumusta! I'm BayMo 🐱</Text>
+                <Text style={styles.title}>Kumusta! I&apos;m BayMo</Text>
                 <Text style={styles.subtitle}>
-                  Let's set up your account. Ilang tanong lang — 2 minutes.
+                  Let&apos;s set up your account. Ilang tanong lang — 2 minutes.
                 </Text>
               </View>
             </View>
@@ -258,7 +258,7 @@ export default function OnboardingScreen() {
 
         {step === 4 && (
           <>
-            <Text style={styles.title}>What's your main goal with BaMo?</Text>
+            <Text style={styles.title}>What&apos;s your main goal with BaMo?</Text>
             <View style={styles.choiceList}>
               {GOALS.map((g) => (
                 <Pressable
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   stepLabel: { ...TypeScale.labelSmall, color: BrandColors.textMuted },
   content: { padding: 20, gap: 16 },
   heroRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  baymo: { width: 64, height: 64 },
+  baymo: { width: 64, height: 64, borderRadius: 32 },
   title: { ...TypeScale.h2, color: BrandColors.textHeading },
   subtitle: { ...TypeScale.body, color: BrandColors.textBody },
   choiceList: { gap: 10 },
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  choiceCardActive: { borderColor: BrandColors.orange, backgroundColor: BrandColors.cream100 },
+  choiceCardActive: { borderColor: BrandColors.navy, backgroundColor: BrandColors.infoSoft },
   choiceTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
   choiceSub: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
   radio: {
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   },
   radioOn: {
     borderColor: BrandColors.orange,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reviewCard: {

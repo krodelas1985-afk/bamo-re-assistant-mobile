@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bubble: {
-    maxWidth: '82%',
+    maxWidth: '90%',
     borderRadius: Radii.button,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 4,
   },
   bubbleBaymo: {
-    backgroundColor: BrandColors.cream200,
+    backgroundColor: BrandColors.tealSoft,
     borderTopRightRadius: 4,
   },
   bubbleAgent: {
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },

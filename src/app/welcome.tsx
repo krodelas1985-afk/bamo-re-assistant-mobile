@@ -26,7 +26,7 @@ import {
   TourSteps,
 } from '@/lib/welcome-tour';
 
-const baymoAvatar = require('../../assets/brand/baymo.png');
+const baymoAvatar = require('../../assets/brand/baymo-head.png');
 
 const TOTAL_STEPS = 7;
 
@@ -461,9 +461,11 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   baymoHero: {
-    width: 180,
-    height: 180,
-    marginBottom: 10,
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    backgroundColor: BrandColors.tealSoft,
+    marginBottom: 18,
   },
   heroTitle: {
     ...TypeScale.h2,
@@ -511,7 +513,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: BrandColors.cream200,
+    backgroundColor: BrandColors.tealSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

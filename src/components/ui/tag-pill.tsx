@@ -20,9 +20,11 @@ export function TagPill({
 }) {
   return (
     <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityState={onPress ? { selected: active } : undefined}
       onPress={onPress}
       disabled={!onPress}
-      style={[styles.pill, cream ? styles.cream : active ? styles.active : styles.inactive]}>
+      style={[styles.pill, !!onPress && { minHeight: 44, justifyContent: 'center' }, cream ? styles.cream : active ? styles.active : styles.inactive]}>
       <Text
         style={[
           styles.text,
@@ -42,7 +44,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   active: {
-    backgroundColor: BrandColors.ink,
+    backgroundColor: BrandColors.navy,
   },
   inactive: {
     backgroundColor: BrandColors.white,

@@ -18,12 +18,19 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
     audioRef.current = null;
   }, []);
 
+  const stopSpeech = useCallback(() => {
+    requestRef.current += 1;
+    player.pause();
+    setSpeakingKey(null);
+    clearAudio();
+  }, [clearAudio, player]);
+
   const playSpeech = useCallback(async (key: string, text: string) => {
     const requestId = requestRef.current + 1;
     try {
       // expo-audio 57.0.4 throws when replace(null) crosses the native bridge.
       // Pausing is enough here; the next valid source replaces the old one.
-      if (speakingKey === key && audioRef.current) {
+      if (speakingKey === key) {
         requestRef.current = requestId;
         player.pause();
         setSpeakingKey(null);
@@ -53,10 +60,7 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
         playsInSilentMode: true,
         shouldRouteThroughEarpiece: false,
       });
-      if (requestRef.current !== requestId) {
-        clearAudio();
-        return;
-      }
+      if (requestRef.current !== requestId) return;
       player.replace({ uri: result.audio.uri });
       player.play();
     } catch {
@@ -89,7 +93,7 @@ export function useBayMoSpeech(onError: (message: string | null) => void) {
     clearAudio();
   }, [clearAudio, player]);
 
-  return { speakingKey, playSpeech };
+  return { speakingKey, playSpeech, stopSpeech };
 }
 
 export function BayMoSpeechButton({
@@ -112,7 +116,7 @@ export function BayMoSpeechButton({
       <Ionicons
         name={speaking ? 'stop-circle-outline' : 'volume-high-outline'}
         size={18}
-        color={BrandColors.navy}
+        color={BrandColors.teal}
       />
     </Pressable>
   );
@@ -121,10 +125,10 @@ export function BayMoSpeechButton({
 const styles = StyleSheet.create({
   button: {
     alignSelf: 'flex-start',
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.cream200,
+    backgroundColor: BrandColors.tealSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

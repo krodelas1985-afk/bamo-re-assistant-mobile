@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   notifHint: {
     ...TypeScale.labelSmall,
-    color: BrandColors.orange,
+    color: BrandColors.orangeDark,
   },
   backdrop: {
     flex: 1,

@@ -145,7 +145,7 @@ function Check({ label }: { label: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BrandColors.screenBg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: BrandColors.white, borderBottomWidth: 1, borderBottomColor: BrandColors.border },
-  headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
+  headerTitle: { ...TypeScale.h3, color: BrandColors.textHeading, flexShrink: 1 },
   content: { padding: 20, alignItems: 'center', gap: 12, paddingBottom: 40 },
   heroIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#1877F2', alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   title: { ...TypeScale.h2, color: BrandColors.textHeading, textAlign: 'center' },

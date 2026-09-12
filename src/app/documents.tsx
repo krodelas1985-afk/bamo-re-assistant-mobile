@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     borderRadius: Radii.button,
     paddingVertical: 14,
   },

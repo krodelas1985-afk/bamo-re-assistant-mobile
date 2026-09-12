@@ -24,7 +24,7 @@ export function NotificationBell() {
   );
 
   return (
-    <Pressable onPress={() => router.push('/notifications')} hitSlop={10} style={styles.wrap}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push('/notifications')} hitSlop={10} style={styles.wrap}>
       <Ionicons name="notifications-outline" size={24} color={BrandColors.textHeading} />
       {count > 0 ? (
         <View style={styles.badge}>
@@ -36,7 +36,7 @@ export function NotificationBell() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 2 },
+  wrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: BrandColors.white, alignItems: 'center', justifyContent: 'center' },
   badge: {
     position: 'absolute',
     top: -4,
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     ...TypeScale.labelSmall,
-    color: BrandColors.white,
+    color: BrandColors.navyDeep,
     fontSize: 10,
     lineHeight: 14,
   },

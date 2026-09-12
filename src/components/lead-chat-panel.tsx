@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -37,6 +38,7 @@ export function LeadChatPanel({
   onAppointment: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [listings, setListings] = useState<Listing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
   const [listingError, setListingError] = useState<string | null>(null);
@@ -65,7 +67,16 @@ export function LeadChatPanel({
   }, [open, retry]);
   return (
     <View style={styles.panel}>
-      <Text style={styles.title}>About {name}</Text>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded }}
+        accessibilityLabel={`About ${name}, ${expanded ? 'hide' : 'show'} actions`}
+        onPress={() => setExpanded((value) => !value)} style={styles.contextHeading}>
+        <Ionicons name="person-circle-outline" size={24} color={BrandColors.teal} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>About {name}</Text>
+          {!expanded && <Text numberOfLines={1} style={styles.note}>{context.listingTitle ?? 'Property & next steps'}</Text>}
+        </View>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={BrandColors.teal} />
+      </Pressable>
       {loading ? (
         <ActivityIndicator
           accessibilityLabel="Checking lead"
@@ -78,7 +89,7 @@ export function LeadChatPanel({
             <Text style={styles.link}>Retry lead</Text>
           </Pressable>
         </View>
-      ) : (
+      ) : expanded ? (
         <>
           <Pressable
             accessibilityRole="button"
@@ -103,7 +114,7 @@ export function LeadChatPanel({
               onPress={onTask}
               style={styles.button}
             >
-              <Text style={styles.label}>Create follow-up task</Text>
+              <Text style={styles.label}>Create task</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -111,15 +122,14 @@ export function LeadChatPanel({
               onPress={onAppointment}
               style={styles.button}
             >
-              <Text style={styles.label}>Schedule appointment</Text>
+              <Text style={styles.label}>Appointment</Text>
             </Pressable>
           </View>
           <Text style={styles.note}>
-            BayMo will ask for the details and show a review card. Nothing is
-            saved until you tap Confirm.
+            Review the details before you confirm. Nothing is saved yet.
           </Text>
         </>
-      )}
+      ) : null}
       <Modal
         visible={open}
         transparent
@@ -201,18 +211,19 @@ export function LeadChatPanel({
   );
 }
 const styles = StyleSheet.create({
+  contextHeading: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   panel: {
     marginHorizontal: 16,
     marginBottom: 8,
     padding: 12,
     gap: 8,
     borderRadius: Radii.card,
-    backgroundColor: BrandColors.coralSoft,
+    backgroundColor: BrandColors.tealSoft,
   },
   title: { ...TypeScale.bodyBold, color: BrandColors.ink },
   link: {
     ...TypeScale.bodySmall,
-    color: BrandColors.coralDark,
+    color: BrandColors.teal,
     paddingVertical: 6,
   },
   note: { ...TypeScale.bodySmall, color: BrandColors.textMuted },

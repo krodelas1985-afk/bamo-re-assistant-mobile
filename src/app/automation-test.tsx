@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BrandColors.border,
   },
-  headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
+  headerTitle: { ...TypeScale.h3, color: BrandColors.textHeading, flexShrink: 1 },
   headerSub: { ...TypeScale.labelSmall, color: BrandColors.textMuted },
   chat: { padding: 16, gap: 8, paddingBottom: 24 },
   intro: {
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },

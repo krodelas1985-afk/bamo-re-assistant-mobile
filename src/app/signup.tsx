@@ -15,7 +15,7 @@ import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
-const baymoAvatar = require('../../assets/brand/baymo.png');
+const baymoAvatar = require('../../assets/brand/baymo-head.png');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -75,12 +75,11 @@ export default function SignUpScreen() {
           keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
             <Image source={baymoAvatar} style={styles.baymo} contentFit="contain" />
-            <Text style={styles.wordmark}>BaMo</Text>
-            <Text style={styles.tagline}>REAL ESTATE MADE SIMPLE</Text>
+            <Image source={require('../../assets/brand/logo.png')} style={{ width: 156, height: 56 }} contentFit="contain" accessibilityLabel="BaMo — Real Estate Made Simple" />
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.welcome}>Create your account 🚀</Text>
+            <Text style={styles.welcome}>Let’s get you started</Text>
             <Text style={styles.subtitle}>
               Start for free — get more leads and follow up faster.
             </Text>
@@ -141,6 +140,7 @@ export default function SignUpScreen() {
             <Button
               label={submitting ? 'Creating account…' : 'Create account'}
               onPress={handleSignUp}
+              loading={submitting}
               style={styles.submit}
             />
 
@@ -173,26 +173,17 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    gap: 2,
+    gap: 12,
   },
   baymo: {
     width: 90,
     height: 90,
   },
-  wordmark: {
-    ...TypeScale.h1,
-    color: BrandColors.navy,
-  },
-  tagline: {
-    ...TypeScale.labelSmall,
-    color: BrandColors.orangeDark,
-    letterSpacing: 2,
-  },
   card: {
     backgroundColor: BrandColors.white,
     borderRadius: Radii.card,
     padding: 20,
-    gap: 14,
+    gap: 18,
   },
   welcome: {
     ...TypeScale.h3,
@@ -219,7 +210,7 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.white,
   },
   checkboxOn: {
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     borderColor: BrandColors.orange,
   },
   checkmark: {

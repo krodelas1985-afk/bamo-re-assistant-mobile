@@ -462,14 +462,6 @@ function AccountChatScreen({
           />
         </Pressable>
       </View>
-      <Text
-        style={[
-          styles.historyHelp,
-          { paddingHorizontal: 20, paddingVertical: 6 },
-        ]}
-      >
-        Last 5 chats saved on this device · View history using the clock
-      </Text>
       {saved.error && (
         <View style={styles.historyNotice}>
           <Text style={styles.noticeText}>{saved.error}</Text>
@@ -850,6 +842,7 @@ function AccountChatScreen({
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Message BayMo"
             value={input}
             onChangeText={(value) => {
               setInput(value);
@@ -895,7 +888,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexShrink: 0,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.coral,
+    backgroundColor: BrandColors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -954,7 +947,8 @@ const styles = StyleSheet.create({
   },
   back: {
     width: 40,
-    height: 40,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: BrandColors.white,
     alignItems: 'center',
@@ -994,7 +988,7 @@ const styles = StyleSheet.create({
   rowUser: { justifyContent: 'flex-end' },
   rowAssistant: { justifyContent: 'flex-start' },
   bubbleAvatar: { width: 28, height: 28, borderRadius: Radii.pill },
-  bubble: { maxWidth: '78%', borderRadius: 20, padding: 13, ...CardShadow },
+  bubble: { maxWidth: '88%', borderRadius: 20, padding: 13, ...CardShadow },
   userBubble: { backgroundColor: BrandColors.ink, borderBottomRightRadius: 4 },
   botBubble: {
     backgroundColor: BrandColors.white,
@@ -1014,7 +1008,7 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     ...TypeScale.labelSmall,
-    color: BrandColors.orange,
+    color: BrandColors.orangeDark,
     textTransform: 'uppercase',
   },
   actionBody: { ...TypeScale.body, color: BrandColors.textHeading },
@@ -1025,16 +1019,18 @@ const styles = StyleSheet.create({
   actionButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },
   confirmBtn: {
     flex: 1,
-    height: 40,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },
   confirmBtnText: { ...TypeScale.bodyBold, color: BrandColors.white },
   cancelBtn: {
     flex: 1,
-    height: 40,
+    minHeight: 48,
+    paddingVertical: 10,
     borderRadius: Radii.pill,
     borderWidth: 1,
     borderColor: BrandColors.border,
@@ -1063,7 +1059,7 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 6,
     backgroundColor: BrandColors.white,
-    borderRadius: Radii.pill,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: BrandColors.border,
   },
@@ -1077,10 +1073,10 @@ const styles = StyleSheet.create({
     color: BrandColors.ink,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
+    width: 46,
+    height: 46,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.coral,
+    backgroundColor: BrandColors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -175,8 +175,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BrandColors.border,
   },
-  headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
-  content: { padding: 16, gap: 10, paddingBottom: 32 },
+  headerTitle: { ...TypeScale.h3, color: BrandColors.textHeading, flexShrink: 1 },
+  content: { padding: 20, gap: 18, paddingBottom: 40 },
   lede: { ...TypeScale.body, color: BrandColors.textSecondary, marginBottom: 4 },
   card: {
     backgroundColor: BrandColors.white,

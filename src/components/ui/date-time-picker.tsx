@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   },
   cellText: { ...TypeScale.body, color: BrandColors.textHeading },
   cellTextSelected: { color: BrandColors.white, fontFamily: 'Inter_600SemiBold' },
-  cellTextToday: { color: BrandColors.orange, fontFamily: 'Inter_600SemiBold' },
+  cellTextToday: { color: BrandColors.orangeDark, fontFamily: 'Inter_600SemiBold' },
 
   timeLabel: { ...TypeScale.label, color: BrandColors.textSecondary, marginTop: 4 },
   pillWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   timePillTextActive: { color: BrandColors.white },
   doneBtn: {
     marginTop: 8,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     borderRadius: Radii.button,
     paddingVertical: 12,
     alignItems: 'center',

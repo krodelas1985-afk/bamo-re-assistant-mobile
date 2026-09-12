@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
+import { View } from 'react-native';
 
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, BrandFonts } from '@/constants/brand';
@@ -28,7 +29,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: BrandColors.orange,
+        tabBarActiveTintColor: BrandColors.navy,
         tabBarInactiveTintColor: BrandColors.textMuted,
         tabBarStyle: {
           backgroundColor: BrandColors.white,
@@ -36,14 +37,16 @@ export default function TabsLayout() {
         },
         tabBarLabelStyle: {
           fontFamily: BrandFonts.medium,
-          fontSize: 11,
+          fontSize: 12,
         },
-        tabBarIcon: ({ color, size }) => (
+        tabBarIcon: ({ color, size, focused }) => (
+          <View style={{ width: 52, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: focused ? BrandColors.orangeSoft : 'transparent' }}>
           <Ionicons
             name={TAB_ICONS[route.name as keyof typeof TAB_ICONS] ?? 'ellipse-outline'}
             size={size}
             color={color}
           />
+          </View>
         ),
       })}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
