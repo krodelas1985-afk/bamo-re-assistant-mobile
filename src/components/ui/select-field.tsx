@@ -120,6 +120,7 @@ const styles = StyleSheet.create({
     color: BrandColors.textSecondary,
   },
   control: {
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -182,6 +183,7 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   option: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,

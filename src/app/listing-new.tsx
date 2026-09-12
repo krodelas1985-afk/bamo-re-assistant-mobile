@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BrandColors.border,
   },
-  headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
+  headerTitle: { ...TypeScale.h3, color: BrandColors.textHeading, flexShrink: 1 },
   content: { padding: 16, gap: 12, paddingBottom: 32 },
   section: { ...TypeScale.h4, color: BrandColors.textHeading, marginTop: 4 },
   fieldLabel: { ...TypeScale.label, color: BrandColors.textSecondary },

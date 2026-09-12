@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     borderBottomColor: BrandColors.border,
   },
   title: { ...TypeScale.h3, color: BrandColors.textHeading, flex: 1 },
-  reset: { ...TypeScale.bodyBold, color: BrandColors.orange },
+  reset: { ...TypeScale.bodyBold, color: BrandColors.orangeDark },
   close: { marginLeft: 4 },
   content: { padding: 16, gap: 14, paddingBottom: 24 },
   section: { gap: 8 },

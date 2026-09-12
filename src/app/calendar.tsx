@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.coral,
+    backgroundColor: BrandColors.navy,
     marginTop: 4,
   },
   scheduleBtn: {
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: BrandColors.coral,
+    backgroundColor: BrandColors.navy,
     borderRadius: Radii.button,
     paddingVertical: 16,
     shadowColor: BrandColors.coral,

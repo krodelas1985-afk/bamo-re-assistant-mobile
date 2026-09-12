@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BaymoBubble } from '@/components/baymo-bubble';
 import { BrandColors, CardShadow, TypeScale } from '@/constants/brand';
 
-/** Standard screen shell: gray app background, safe area, optional title header, scrollable content. */
+/** Shared cream canvas, consistent header, and keyboard-aware content. */
 export function Screen({
   title,
   children,
@@ -30,7 +30,7 @@ export function Screen({
       {title || onBack || headerRight ? (
         <View style={styles.header}>
           {onBack ? (
-            <Pressable onPress={onBack} hitSlop={12} style={styles.back}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={onBack} hitSlop={12} style={styles.back}>
               <Ionicons name="chevron-back" size={20} color={BrandColors.ink} />
             </Pressable>
           ) : null}
@@ -63,8 +63,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   back: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: BrandColors.white,
     alignItems: 'center',
@@ -76,11 +76,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     ...TypeScale.h1,
+    flexShrink: 1,
     color: BrandColors.ink,
   },
   content: {
     padding: 20,
-    gap: 12,
-    paddingBottom: 40,
+    gap: 16,
+    paddingBottom: 112,
   },
 });

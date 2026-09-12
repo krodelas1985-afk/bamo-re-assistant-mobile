@@ -1,34 +1,43 @@
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
 
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 
 type Variant = 'primary' | 'secondary';
 
-/** Brand button — primary = orange filled, secondary = white outlined with navy text. */
+/** One clear primary action, with a quieter outlined alternative. */
 export function Button({
   label,
   onPress,
   variant = 'primary',
   small = false,
   style,
+  disabled = false,
+  loading = false,
 }: {
   label: string;
   onPress?: () => void;
   variant?: Variant;
   small?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  loading?: boolean;
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
         small && styles.small,
         variant === 'primary'
-          ? [styles.primary, pressed && { backgroundColor: BrandColors.coralDark }]
+          ? [styles.primary, pressed && { backgroundColor: BrandColors.navyDark }]
           : [styles.secondary, pressed && { backgroundColor: BrandColors.cream100 }],
         style,
+        (disabled || loading) && { opacity: 0.55 },
       ]}>
+      {loading && <ActivityIndicator color={variant === 'primary' ? BrandColors.white : BrandColors.navy} />}
       <Text
         style={[
           small ? styles.textSmall : styles.text,
@@ -42,6 +51,9 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
+    minHeight: 52,
+    flexDirection: 'row',
+    gap: 8,
     borderRadius: Radii.button,
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -49,14 +61,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primary: {
-    backgroundColor: BrandColors.coral,
-    shadowColor: BrandColors.coral,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
+    backgroundColor: BrandColors.navy,
   },
   small: {
+    minHeight: 44,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
@@ -67,8 +75,12 @@ const styles = StyleSheet.create({
   },
   text: {
     ...TypeScale.button,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   textSmall: {
     ...TypeScale.bodyBold,
+    flexShrink: 1,
+    textAlign: 'center',
   },
 });

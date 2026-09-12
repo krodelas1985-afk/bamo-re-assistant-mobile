@@ -20,7 +20,7 @@ const STATUS_META: Record<
   { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }
 > = {
   draft: { label: 'Draft', color: BrandColors.textMuted, icon: 'create-outline' },
-  pending_review: { label: 'In review', color: BrandColors.orange, icon: 'time-outline' },
+  pending_review: { label: 'In review', color: BrandColors.orangeDark, icon: 'time-outline' },
   active: { label: 'Live', color: BrandColors.success, icon: 'flash' },
   paused: { label: 'Paused', color: BrandColors.textMuted, icon: 'pause-circle-outline' },
   completed: { label: 'Finished', color: BrandColors.textMuted, icon: 'checkmark-done-outline' },
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   },
   cardText: { flex: 1, gap: 2 },
   cardTitle: { ...TypeScale.bodyBold, color: BrandColors.textHeading },
-  scopeTag: { ...TypeScale.labelSmall, color: BrandColors.orange },
+  scopeTag: { ...TypeScale.labelSmall, color: BrandColors.orangeDark },
   cardBody: { ...TypeScale.bodySmall, color: BrandColors.textSecondary },
   statusPill: {
     borderWidth: 1,

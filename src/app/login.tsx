@@ -4,12 +4,12 @@ import { useState } from 'react';
 import {
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { KeyboardAwareScrollView, KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TextField } from '@/components/ui/text-field';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { BrandColors, CardShadow, TypeScale } from '@/constants/brand';
@@ -57,18 +57,16 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>
             <Image source={baymoAvatar} style={styles.baymo} contentFit="contain" />
-            <Text style={styles.wordmark}>BaMo</Text>
-            <Text style={styles.tagline}>REAL ESTATE MADE SIMPLE</Text>
+            <Image source={require('../../assets/brand/logo.png')} style={{ width: 156, height: 56 }} contentFit="contain" accessibilityLabel="BaMo — Real Estate Made Simple" />
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.welcome}>Maligayang pagbabalik! 👋</Text>
-            <Text style={styles.subtitle}>Sign in to see your leads and appointments.</Text>
+            <Text style={styles.welcome}>Welcome back</Text>
+            <Text style={styles.subtitle}>Kumusta! Your leads and appointments are waiting.</Text>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
+              <TextField
+                label="Email"
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@example.com"
@@ -81,9 +79,8 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.field}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
+              <TextField
+                label="Password"
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
@@ -100,6 +97,7 @@ export default function LoginScreen() {
             <Button
               label={submitting ? 'Signing in…' : 'Sign in'}
               onPress={handleSignIn}
+              loading={submitting}
               style={styles.submit}
             />
 
@@ -136,7 +134,7 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
-    gap: 2,
+    gap: 12,
   },
   baymo: {
     width: 96,
@@ -145,21 +143,11 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.white,
     ...CardShadow,
   },
-  wordmark: {
-    ...TypeScale.h1,
-    color: BrandColors.ink,
-    marginTop: 10,
-  },
-  tagline: {
-    ...TypeScale.labelSmall,
-    color: BrandColors.coralDark,
-    letterSpacing: 2,
-  },
   card: {
     backgroundColor: BrandColors.white,
-    borderRadius: 26,
-    padding: 22,
-    gap: 14,
+    borderRadius: 24,
+    padding: 20,
+    gap: 18,
     ...CardShadow,
   },
   welcome: {
@@ -172,20 +160,6 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: 6,
-  },
-  label: {
-    ...TypeScale.labelSmall,
-    color: BrandColors.ink,
-  },
-  input: {
-    ...TypeScale.input,
-    borderWidth: 1.5,
-    borderColor: BrandColors.border,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: BrandColors.ink,
-    backgroundColor: '#FBFAF7',
   },
   error: {
     ...TypeScale.formError,

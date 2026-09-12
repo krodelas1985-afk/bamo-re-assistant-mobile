@@ -23,6 +23,15 @@ export default function MoreScreen() {
 
   return (
     <Screen title="More">
+      <Pressable accessibilityRole="button" onPress={() => router.push('/profile')} style={styles.identity}>
+        <View style={styles.identityIcon}><Ionicons name="person-outline" size={26} color={BrandColors.white} /></View>
+        <View style={styles.rowText}>
+          <Text style={styles.identityName}>{profile?.full_name || 'Your BaMo workspace'}</Text>
+          <Text style={styles.rowSubtitle}>Your profile & business details</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={BrandColors.navy} />
+      </Pressable>
+      <Text style={styles.sectionLabel}>Your tools</Text>
       {ITEMS.map((item) => {
         const route = item.route;
         return (
@@ -58,6 +67,10 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, borderRadius: 24, backgroundColor: BrandColors.orangeSoft },
+  identityIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: BrandColors.navy, alignItems: 'center', justifyContent: 'center' },
+  identityName: { ...TypeScale.h4, color: BrandColors.navy },
+  sectionLabel: { ...TypeScale.label, color: BrandColors.textSecondary, marginTop: 8 },
   row: {
     backgroundColor: BrandColors.white,
     borderRadius: Radii.card,
@@ -69,8 +82,8 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: BrandColors.cream100,
+    borderRadius: 14,
+    backgroundColor: BrandColors.infoSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

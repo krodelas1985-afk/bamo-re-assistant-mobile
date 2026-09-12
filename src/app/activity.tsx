@@ -114,7 +114,9 @@ const styles = StyleSheet.create({
   },
   row: {
     backgroundColor: BrandColors.white,
-    borderRadius: Radii.card,
+    borderRadius: Radii.button,
+    borderBottomWidth: 1,
+    borderBottomColor: BrandColors.borderLight,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',

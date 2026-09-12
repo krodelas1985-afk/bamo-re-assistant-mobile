@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   imageArea: {
-    height: 150,
+    aspectRatio: 1.65,
     backgroundColor: BrandColors.cream300,
   },
   image: {
@@ -100,8 +100,8 @@ const styles = StyleSheet.create({
     color: BrandColors.textSecondary,
   },
   price: {
-    ...TypeScale.h3,
-    color: BrandColors.orange,
+    ...TypeScale.h2,
+    color: BrandColors.navy,
     marginTop: 4,
   },
   specs: {

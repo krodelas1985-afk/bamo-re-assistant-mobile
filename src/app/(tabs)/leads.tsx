@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     borderRadius: Radii.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
   },
   filterBtnText: { ...TypeScale.label, color: BrandColors.navy },
   filterBadge: {
-    backgroundColor: BrandColors.orange,
+    backgroundColor: BrandColors.navy,
     borderRadius: Radii.pill,
     minWidth: 18,
     height: 18,

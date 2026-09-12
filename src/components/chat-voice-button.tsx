@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     borderRadius: Radii.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: BrandColors.navy,
+    backgroundColor: BrandColors.teal,
   },
   recording: { backgroundColor: BrandColors.error },
   disabled: { opacity: 0.45 },

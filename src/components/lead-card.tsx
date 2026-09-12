@@ -83,9 +83,10 @@ const styles = StyleSheet.create({
     color: BrandColors.textMuted,
   },
   summaryBox: {
-    backgroundColor: BrandColors.cream100,
-    borderRadius: Radii.button,
-    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: BrandColors.orange,
+    paddingLeft: 12,
+    paddingVertical: 4,
   },
   summaryText: {
     ...TypeScale.body,

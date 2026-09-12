@@ -12,11 +12,12 @@ const baymoHead = require('../../assets/brand/baymo-head.png');
 export function BaymoBubble({ onPress }: { onPress?: () => void }) {
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={onPress}
       accessibilityLabel="Chat with BayMo, your AI assistant"
       style={({ pressed }) => [styles.pill, pressed && styles.pressed]}>
       <Image source={baymoHead} style={styles.avatar} contentFit="cover" />
-      <Text style={styles.name}>BayMo</Text>
+      <Text style={styles.name}>Ask BayMo</Text>
       <View style={styles.onlineDot} />
     </Pressable>
   );

@@ -47,6 +47,7 @@ function BayMoRow({
   speakingKey,
   disabled,
   onSpeak,
+  showAvatar = false,
 }: {
   children: React.ReactNode;
   tinted?: boolean;
@@ -55,12 +56,13 @@ function BayMoRow({
   speakingKey?: string | null;
   disabled?: boolean;
   onSpeak?: (key: string, text: string) => void;
+  showAvatar?: boolean;
 }) {
   return (
     <View style={rowStyles.row}>
-      <Image source={baymoHead} style={rowStyles.avatar} contentFit="cover" />
+      {showAvatar && <Image source={baymoHead} style={rowStyles.avatar} contentFit="cover" />}
       <View style={[rowStyles.bubble, tinted && rowStyles.bubbleTinted]}>
-        {children}
+        <View style={{ flex: 1, gap: 8 }}>{children}</View>
         {!!speechKey && !!speechText && !!onSpeak && (
           <BayMoSpeechButton
             speaking={speakingKey === speechKey}
@@ -74,18 +76,19 @@ function BayMoRow({
 }
 
 const rowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 18 },
   avatar: { width: 30, height: 30, borderRadius: Radii.pill },
   bubble: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: BrandColors.white,
     borderRadius: 20,
-    borderBottomLeftRadius: 4,
     padding: 14,
     gap: 8,
     ...CardShadow,
   },
-  bubbleTinted: { backgroundColor: BrandColors.coralSoft },
+  bubbleTinted: { backgroundColor: BrandColors.cream200, borderWidth: 1, borderColor: BrandColors.cream400 },
 });
 
 export default function HomeScreen() {
@@ -239,15 +242,16 @@ export default function HomeScreen() {
         <ScrollView ref={scrollRef} contentContainerStyle={styles.feed}>
           {/* Greeting */}
           <BayMoRow
+            tinted
             speechKey="greeting"
-            speechText={`${greetingForNow()}, ${displayName}! Kumusta? Here's where we are today. Ask me anything or tap a shortcut below.`}
+            speechText={`${greetingForNow()}, ${displayName}! Let's make time for what matters today.`}
             speakingKey={speakingKey}
             onSpeak={playSpeech}>
             <Text style={styles.greeting}>
-              {greetingForNow()}, {displayName}! 👋
+              {greetingForNow()}, {displayName}!
             </Text>
             <Text style={styles.bodyText}>
-              Kumusta? Here&apos;s where we are today — ask me anything or tap a shortcut below.
+              Let&apos;s make time for what matters today.
             </Text>
           </BayMoRow>
 
@@ -257,7 +261,7 @@ export default function HomeScreen() {
             <View style={styles.flagRow}>
               <Image source={baymoHead} style={rowStyles.avatar} contentFit="cover" />
               <View style={styles.flagBubble}>
-                <Text style={styles.flagHeading}>🔔 Uy, kailangan mo itong tingnan!</Text>
+                <Text style={styles.flagHeading}>🔔 Needs your attention</Text>
                 {flags.map((f) => (
                   <View key={f.id} style={styles.flagItem}>
                     <Pressable
@@ -299,6 +303,7 @@ export default function HomeScreen() {
               speechText={updateLine}
               speakingKey={speakingKey}
               onSpeak={playSpeech}>
+              <Text style={styles.cardTitle}>Your daily update</Text>
               <Text style={styles.bodyText}>{updateLine}</Text>
               {digest ? (
                 <Text style={styles.metaText}>
@@ -327,7 +332,7 @@ export default function HomeScreen() {
                   key={s.lead_id}
                   style={styles.leadRow}
                   onPress={() => router.push({ pathname: '/lead/[id]', params: { id: s.lead_id } })}>
-                  <Text style={styles.leadRowText} numberOfLines={1}>
+                  <Text style={styles.leadRowText} numberOfLines={2}>
                     {s.temperature === 'Hot' ? '🔥' : '✅'}{' '}
                     <Text style={styles.leadRowName}>{s.name}</Text> — {s.reason}
                   </Text>
@@ -363,7 +368,7 @@ export default function HomeScreen() {
                     <Ionicons name="ellipse-outline" size={20} color={BrandColors.coral} />
                   </Pressable>
                   <Pressable style={{ flex: 1 }} onPress={() => router.push('/tasks')}>
-                    <Text style={styles.taskTitle} numberOfLines={1}>
+                    <Text style={styles.taskTitle} numberOfLines={2}>
                       {t.title}
                     </Text>
                     <Text
@@ -393,7 +398,7 @@ export default function HomeScreen() {
               <Text style={styles.cardTitle}>📣 Heads up from BaMo</Text>
               {announcements.map((a) => (
                 <View key={a.id} style={{ gap: 2 }}>
-                  <Text style={styles.taskTitle} numberOfLines={1}>
+                  <Text style={styles.taskTitle} numberOfLines={2}>
                     {a.pinned ? '📌 ' : ''}
                     {a.title}
                   </Text>
@@ -412,6 +417,7 @@ export default function HomeScreen() {
             m.role === 'assistant' ? (
               <BayMoRow
                 key={i}
+                showAvatar
                 speechKey={`message:${i}`}
                 speechText={m.content}
                 speakingKey={speakingKey}
@@ -455,6 +461,7 @@ export default function HomeScreen() {
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
+            accessibilityLabel="Message BayMo"
             value={input}
             onChangeText={(value) => {
               setInput(value);
@@ -557,7 +564,7 @@ const styles = StyleSheet.create({
   bodyText: { ...TypeScale.body, color: BrandColors.ink },
   metaText: { ...TypeScale.bodySmall, color: BrandColors.textSecondary },
   cardTitle: { ...TypeScale.bodyBold, color: BrandColors.ink },
-  linkText: { ...TypeScale.bodyBold, color: BrandColors.coral },
+  linkText: { ...TypeScale.bodyBold, color: BrandColors.orangeDark },
 
   leadRow: {
     flexDirection: 'row',
@@ -574,7 +581,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: BrandColors.coral,
+    backgroundColor: BrandColors.navy,
     borderRadius: Radii.pill,
     paddingVertical: 10,
     marginTop: 4,
@@ -593,7 +600,7 @@ const styles = StyleSheet.create({
 
   userRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 12 },
   userBubble: {
-    maxWidth: '78%',
+    maxWidth: '88%',
     backgroundColor: BrandColors.ink,
     borderRadius: 20,
     borderBottomRightRadius: 4,
@@ -629,7 +636,7 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingRight: 6,
     backgroundColor: BrandColors.white,
-    borderRadius: Radii.pill,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: BrandColors.border,
   },
@@ -643,10 +650,10 @@ const styles = StyleSheet.create({
     color: BrandColors.ink,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
+    width: 46,
+    height: 46,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.coral,
+    backgroundColor: BrandColors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },

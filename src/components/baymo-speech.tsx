@@ -112,7 +112,7 @@ export function BayMoSpeechButton({
       <Ionicons
         name={speaking ? 'stop-circle-outline' : 'volume-high-outline'}
         size={18}
-        color={BrandColors.navy}
+        color={BrandColors.teal}
       />
     </Pressable>
   );
@@ -121,10 +121,10 @@ export function BayMoSpeechButton({
 const styles = StyleSheet.create({
   button: {
     alignSelf: 'flex-start',
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radii.pill,
-    backgroundColor: BrandColors.cream200,
+    backgroundColor: BrandColors.tealSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

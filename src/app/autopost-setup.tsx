@@ -281,8 +281,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: BrandColors.border,
   },
-  headerTitle: { ...TypeScale.h4, color: BrandColors.textHeading },
-  content: { padding: 16, gap: 10, paddingBottom: 32 },
+  headerTitle: { ...TypeScale.h3, color: BrandColors.textHeading, flexShrink: 1 },
+  content: { padding: 20, gap: 18, paddingBottom: 40 },
   progressRow: { flexDirection: 'row', gap: 6, marginBottom: 4 },
   progressSeg: {
     flex: 1,
