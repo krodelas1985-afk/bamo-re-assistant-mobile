@@ -30,6 +30,22 @@ function load(file, mocks) {
   return loaded.exports;
 }
 
+function loadTsx(file, mocks) {
+  const loaded = new Module(file);
+  loaded.require = (name) => {
+    if (name in mocks) return mocks[name];
+    throw new Error(`Unexpected dependency: ${name}`);
+  };
+  loaded._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+    },
+  }).outputText, `${file}.cjs`);
+  return loaded.exports;
+}
+
 const recording = (content = new Uint8Array(200), type = 'audio/mp4') =>
   new File([content], 'baymo-voice.m4a', { type });
 
@@ -253,4 +269,56 @@ test('Android stores Cedar audio in temporary cache and deletes it after playbac
   assert.deepEqual([...createdFile.bytes], [7, 8, 9]);
   result.audio.cleanup();
   assert.equal(createdFile.deleted, true);
+});
+
+test('speaker reaches Cedar playback when expo-audio rejects replace(null)', async () => {
+  let synthesizeCalls = 0;
+  let played = false;
+  let replacement;
+  const player = {
+    pause() {},
+    replace(source) {
+      if (source === null) throw new Error('Native AudioSource cannot be null');
+      replacement = source;
+    },
+    play() { played = true; },
+    volume: 0,
+  };
+  const { useBayMoSpeech } = loadTsx('src/components/baymo-speech.tsx', {
+    '@expo/vector-icons': { Ionicons() {} },
+    'expo-audio': {
+      setAudioModeAsync: async () => {},
+      useAudioPlayer: () => player,
+      useAudioPlayerStatus: () => ({ error: null, didJustFinish: false }),
+    },
+    react: {
+      useCallback: (callback) => callback,
+      useEffect() {},
+      useRef: (current) => ({ current }),
+      useState: (initial) => [initial, () => {}],
+    },
+    'react/jsx-runtime': { jsx() {}, jsxs() {} },
+    'react-native': { Pressable() {}, StyleSheet: { create: (styles) => styles } },
+    '@/constants/brand': { BrandColors: {}, Radii: {} },
+    '@/lib/baymo-chat': {
+      synthesizeBayMoSpeech: async () => {
+        synthesizeCalls += 1;
+        return {
+          audio: { uri: 'file:///cache/baymo-cedar.mp3', cleanup() {} },
+          error: null,
+        };
+      },
+    },
+  });
+
+  const errors = [];
+  const { playSpeech } = useBayMoSpeech((message) => {
+    if (message) errors.push(message);
+  });
+  await playSpeech('reply:1', 'Kumusta');
+
+  assert.equal(synthesizeCalls, 1);
+  assert.deepEqual(replacement, { uri: 'file:///cache/baymo-cedar.mp3' });
+  assert.equal(played, true);
+  assert.deepEqual(errors, []);
 });

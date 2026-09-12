@@ -132,6 +132,11 @@ function AccountChatScreen({
 }) {
   const router = useRouter();
 
+  const leaveChat = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }, [router]);
+
   // Android back: BayMo chat can be reached from a lead, Settings, the welcome
   // tour or the floating bubble. If this screen is the only one on the stack,
   // expo-router reports nothing to pop and React Native finishes the activity —
@@ -139,12 +144,11 @@ function AccountChatScreen({
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (router.canGoBack()) router.back();
-        else router.replace('/');
+        leaveChat();
         return true;
       });
       return () => subscription.remove();
-    }, [router]),
+    }, [leaveChat]),
   );
   const { seed } = useLocalSearchParams<{ seed?: string }>();
   const scrollRef = useRef<ScrollView>(null);
@@ -412,7 +416,9 @@ function AccountChatScreen({
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Leave BayMo chat"
+          onPress={leaveChat}
           hitSlop={12}
           style={styles.back}
         >
