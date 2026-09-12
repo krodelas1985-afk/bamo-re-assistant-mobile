@@ -620,6 +620,12 @@ Deno.serve(async (req) => {
     }
     const audioFormat = payload.audio_format === 'mp3' ? 'mp3' : 'aac';
     const result = await generateBayMoSpeech(payload.text, openaiKey, fetch, audioFormat);
+    // Playback failures on the phone are invisible from here; record what we sent.
+    console.log('BayMo speak result', JSON.stringify({
+      format: audioFormat,
+      bytes: result.audio?.byteLength ?? 0,
+      error: result.error ?? null,
+    }));
     if (result.error || !result.audio) {
       return j({ error: result.error ?? 'BayMo could not prepare the voice reply.' }, result.status ?? 500);
     }
