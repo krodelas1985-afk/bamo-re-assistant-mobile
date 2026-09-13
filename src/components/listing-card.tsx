@@ -43,7 +43,9 @@ export function ListingCard({ listing }: { listing: Listing }) {
       <View style={styles.body}>
         <Text style={styles.title}>{listing.title}</Text>
         <Text style={styles.location}>📍 {listing.location}</Text>
-        <Text style={styles.price}>{formatPeso(listing.price)}</Text>
+        <Text style={styles.price}>
+          {listing.price > 0 ? formatPeso(listing.price) : 'Price on request'}
+        </Text>
         <Text style={styles.specs}>
           {listing.bedrooms} BR · {listing.baths} T&B · {listing.floorArea} sqm
         </Text>
