@@ -48,6 +48,8 @@ export type MarketplaceResult =
       account_status: string | null;
       display_name: string | null;
       profile_slug: string | null;
+      /** Public URL of the agent's Marketplace profile photo, or null if none is set. */
+      photo_url: string | null;
       listings: MarketplaceListing[];
     };
 
