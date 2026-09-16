@@ -5,6 +5,7 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 
 import { Listing, ListingCard } from '@/components/listing-card';
 import { Screen } from '@/components/screen';
+import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { fetchMyListings } from '@/lib/listings';
 import {
@@ -64,6 +65,18 @@ export default function ListingsScreen() {
         </View>
       ) : (
         <>
+          {marketplace?.linked && !marketplaceError ? (
+            <View style={styles.agent}>
+              <Avatar name={marketplace.display_name ?? ''} uri={marketplace.photo_url} size={44} />
+              <View style={styles.agentText}>
+                <Text style={styles.agentName} numberOfLines={1}>
+                  {marketplace.display_name || 'Your Marketplace profile'}
+                </Text>
+                <Text style={styles.agentLabel}>Your BaMo Marketplace profile</Text>
+              </View>
+            </View>
+          ) : null}
+
           <Text style={styles.section}>On BaMo Marketplace</Text>
 
           {marketplaceError ? (
@@ -136,6 +149,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   postText: { ...TypeScale.button, color: BrandColors.white },
+  agent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  agentText: { flex: 1 },
+  agentName: { ...TypeScale.h4, color: BrandColors.textHeading },
+  agentLabel: { ...TypeScale.bodySmall, color: BrandColors.textMuted },
   section: {
     ...TypeScale.h4,
     color: BrandColors.textHeading,
