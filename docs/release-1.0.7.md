@@ -14,7 +14,7 @@ Based on master 41924a9; last Android APK was 1.0.6 at 42fe81a.
 
 ## Validation
 
-Chat/history/actions/context/voice and release integration tests pass (37 tests total). TypeScript passes. Full lint has zero errors and two existing warnings (onboarding dependencies and an unused backend type). Whitespace checks pass.
+Chat/history/actions/context/voice and release integration tests pass (37 tests total). TypeScript passes. Full lint has zero errors and two existing warnings (onboarding dependencies and an unused backend lint directive). Whitespace checks pass.
 
 Backend Messenger changes merged through Ads Manager PR 3 and deployed to production at 811b4ee. Live unauthenticated status request returns 401/no-store; expired browser login returns 410 with a mobile recovery link. AI generation functions were updated without database migrations.
 
