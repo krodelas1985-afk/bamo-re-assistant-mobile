@@ -1,6 +1,7 @@
 // Deno resolves this URL import when the Edge Function is bundled.
 // eslint-disable-next-line import/no-unresolved
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkAiQuota } from '../_shared/ai-quota.ts';
 import { executeRecord, proposeRecord, type RecordAction } from './actions.ts';
 import { resolveLeadContext } from './lead-context.ts';
 import { generateBayMoSpeech } from './speech.ts';
@@ -692,6 +693,10 @@ Deno.serve(async (req) => {
 
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
   const task = payload.task === 'document' ? 'document' : 'chat';
+  if (task === 'document') {
+    const quota = await checkAiQuota(admin, ctx.clientId);
+    if (quota) return j(quota.body, quota.status);
+  }
   if (messages.length === 0) return j({ error: 'messages is required' }, 400);
 
   const selectedContext = await resolveLeadContext(

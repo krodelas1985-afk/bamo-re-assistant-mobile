@@ -18,7 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/button';
 import { TagPill } from '@/components/ui/tag-pill';
 import { TextField } from '@/components/ui/text-field';
+import { UpgradeBanner } from '@/components/ui/upgrade-banner';
 import { useAuth } from '@/contexts/auth-context';
+import { useUsage } from '@/hooks/use-usage';
 import { BrandColors, Radii, TypeScale } from '@/constants/brand';
 import {
   GeneratedListing,
@@ -27,6 +29,7 @@ import {
   generateListing,
   uploadListingPhoto,
 } from '@/lib/listings';
+import { atLimit } from '@/lib/usage';
 
 const PROPERTY_TYPES = ['House & Lot', 'Condo', 'Townhouse', 'Lot', 'Commercial'];
 
@@ -34,14 +37,16 @@ const toNum = (s: string): number | null => {
   const n = Number(s.replace(/[^0-9.]/g, ''));
   return s.trim() && !Number.isNaN(n) ? n : null;
 };
-const numStr = (n: number | null | undefined) => (n == null ? '' : String(n));
 
 type Photo = { uri: string; url: string };
 
 export default function NewListingScreen() {
   const router = useRouter();
   const { profile, session } = useAuth();
+  const { usage } = useUsage();
   const clientId = profile?.client_id ?? null;
+  const listingsFull = atLimit(usage?.listings);
+  const aiFull = atLimit(usage?.ai);
 
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -169,6 +174,7 @@ export default function NewListingScreen() {
       </View>
 
       <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {listingsFull ? <UpgradeBanner message={`You've reached your plan's ${usage?.listings.limit}-listing limit. Upgrade to submit more listings.`} /> : null}
         {/* Photos */}
         <Text style={styles.section}>Photos</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -205,10 +211,23 @@ export default function NewListingScreen() {
             numberOfLines={3}
           />
           <Button
-            label={generating ? 'BayMo is writing…' : '✨ Ask BayMo to generate'}
+            label={
+              aiFull
+                ? 'Monthly AI limit reached'
+                : generating
+                ? 'BayMo is writing…'
+                : '✨ Ask BayMo to generate'
+            }
             onPress={askBayMo}
+            disabled={aiFull}
             style={styles.aiBtn}
           />
+          {aiFull && (
+            <Text style={styles.aiSub}>
+              You&apos;ve used all {usage?.ai.limit} free AI credits this month. You can still fill in
+              the listing yourself.
+            </Text>
+          )}
         </View>
 
         {/* Structured fields */}
@@ -264,10 +283,11 @@ export default function NewListingScreen() {
       </KeyboardAwareScrollView>
 
       <View style={styles.footer}>
-        <Button label="Save draft" variant="secondary" onPress={() => save('draft')} style={styles.footerBtn} />
+        <Button label="Save draft" variant="secondary" onPress={() => save('draft')} disabled={listingsFull || saving} style={styles.footerBtn} />
         <Button
-          label={saving ? 'Saving…' : 'Publish'}
+          label={listingsFull ? 'Listing limit reached' : saving ? 'Saving…' : 'Submit for review'}
           onPress={() => save('published')}
+          disabled={listingsFull || saving}
           style={styles.footerBtn}
         />
       </View>

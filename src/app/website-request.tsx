@@ -26,11 +26,24 @@ import {
 } from '@/lib/website';
 
 export default function WebsiteRequestScreen() {
+  const { profile } = useAuth();
+  if (!profile) return <View style={styles.safe}><ActivityIndicator color={BrandColors.navy} /></View>;
+  return <WebsiteRequestForm key={profile.id} />;
+}
+
+/** "0917 123 4567" → https://wa.me/639171234567 (PH numbers). */
+function waLinkFromNumber(num: string): string {
+  const digits = num.replace(/\D/g, '');
+  const intl = digits.startsWith('0') ? `63${digits.slice(1)}` : digits;
+  return `https://wa.me/${intl}`;
+}
+
+function WebsiteRequestForm() {
   const router = useRouter();
   const { profile, session } = useAuth();
   const clientId = profile?.client_id ?? null;
 
-  const [hero, setHero] = useState<{ uri: string; url: string } | null>(null);
+  const [hero, setHero] = useState<{ uri: string; url: string } | null>(() => profile?.avatar_url ? { uri: profile.avatar_url, url: profile.avatar_url } : null);
   const [uploading, setUploading] = useState(false);
 
   const [listings, setListings] = useState<{ id: string; title: string }[]>([]);
@@ -39,43 +52,16 @@ export default function WebsiteRequestScreen() {
   const [assetsUrl, setAssetsUrl] = useState('');
   const [facts, setFacts] = useState('');
 
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [prc, setPrc] = useState('');
-  const [area, setArea] = useState('');
-  const [company, setCompany] = useState('');
+  const [name, setName] = useState(profile?.full_name ?? '');
+  const [phone, setPhone] = useState(profile?.phone ?? '');
+  const [email, setEmail] = useState(profile?.email ?? '');
+  const [prc, setPrc] = useState(profile?.prc_number ?? '');
+  const [area, setArea] = useState(profile?.service_area || [profile?.location_city, profile?.location_province].filter(Boolean).join(', '));
+  const [company, setCompany] = useState(profile?.company ?? '');
   const [messenger, setMessenger] = useState('');
-  const [whatsapp, setWhatsapp] = useState('');
+  const [whatsapp, setWhatsapp] = useState(() => profile?.whatsapp ? waLinkFromNumber(profile.whatsapp) : '');
 
   const [saving, setSaving] = useState(false);
-
-  /** "0917 123 4567" → https://wa.me/639171234567 (PH numbers). */
-  const waLinkFromNumber = (num: string): string => {
-    const digits = num.replace(/\D/g, '');
-    const intl = digits.startsWith('0') ? `63${digits.slice(1)}` : digits;
-    return `https://wa.me/${intl}`;
-  };
-
-  // Prefill agent details from the signed-in profile (Agent Profile Phase 4);
-  // everything stays editable per-website.
-  useEffect(() => {
-    if (profile?.full_name) setName(profile.full_name);
-    if (profile?.email) setEmail(profile.email);
-    if (profile?.phone) setPhone(profile.phone);
-    if (profile?.prc_number) setPrc(profile.prc_number);
-    if (profile?.company) setCompany(profile.company);
-    if (profile?.service_area) {
-      setArea(profile.service_area);
-    } else if (profile?.location_city && profile?.location_province) {
-      setArea(`${profile.location_city}, ${profile.location_province}`);
-    }
-    if (profile?.whatsapp) setWhatsapp(waLinkFromNumber(profile.whatsapp));
-    if (profile?.avatar_url) {
-      const url = profile.avatar_url;
-      setHero((h) => h ?? { uri: url, url });
-    }
-  }, [profile]);
 
   useEffect(() => {
     fetchListingOptions().then(setListings);

@@ -62,7 +62,6 @@ export default function NotificationsScreen() {
       markNotificationRead(n.id);
     }
     if (n.route) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       router.push(n.route as any);
     }
   };
