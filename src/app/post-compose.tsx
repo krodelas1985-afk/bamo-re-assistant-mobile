@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button';
 import { TagPill } from '@/components/ui/tag-pill';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/contexts/auth-context';
+import { useUsage } from '@/hooks/use-usage';
+import { atLimit } from '@/lib/usage';
 import { BrandColors, CardShadow, Radii, TypeScale } from '@/constants/brand';
 import {
   Creative,
@@ -91,6 +93,8 @@ function dateStr(offsetDays: number): string {
 export default function PostComposeScreen() {
   const router = useRouter();
   const { profile, session } = useAuth();
+  const { usage } = useUsage();
+  const aiFull = atLimit(usage?.ai);
   const clientId = profile?.client_id ?? null;
   const userId = session?.user.id ?? null;
 
@@ -387,7 +391,12 @@ export default function PostComposeScreen() {
           {generating ? (
             <ActivityIndicator color={BrandColors.navy} />
           ) : (
-            <Button label="✨ Generate caption" variant="secondary" onPress={generate} />
+            <Button
+              label={aiFull ? 'Monthly AI limit reached' : '✨ Generate caption'}
+              variant="secondary"
+              onPress={generate}
+              disabled={aiFull}
+            />
           )}
         </View>
 

@@ -8,6 +8,9 @@
  * is set, otherwise OpenAI gpt-4o. JWT-verified. Keys never ship in the app.
  */
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkAiQuota } from '../_shared/ai-quota.ts';
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -52,6 +55,16 @@ Deno.serve(async (req) => {
   if (!details && Object.keys(fields).length === 0) {
     return j({ error: 'Provide some property details to generate a listing.' }, 400);
   }
+
+  const keys = Deno.env.get('SUPABASE_SECRET_KEYS');
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, keys ? JSON.parse(keys).default : Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data: identity, error: identityError } = await admin.auth.getUser(token);
+  if (identityError || identity.user?.id !== uid) return j({ error: 'Not authenticated' }, 401);
+  const { data: profile, error: profileError } = await admin.from('profiles').select('client_id').eq('id', uid).maybeSingle();
+  if (profileError) return j({ error: 'Could not check your workspace. Please try again.' }, 503);
+  if (!profile?.client_id) return j({ error: 'Your workspace is not linked yet.' }, 403);
+  const quota = await checkAiQuota(admin, profile.client_id);
+  if (quota) return j(quota.body, quota.status);
 
   const system =
     `You write real estate listings for a Philippine agent using the BaMo app. ` +

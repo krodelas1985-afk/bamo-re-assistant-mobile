@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const { Buffer } = require('node:buffer');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const Module = require('node:module');
@@ -112,6 +113,7 @@ test('returns useful errors without exposing provider details', async () => {
 test('mobile client sends a reviewed recording through the authenticated function', async () => {
   let request;
   const { transcribeBayMoAudio } = load('src/lib/baymo-chat.ts', {
+    '@/lib/usage': { aiLimitMessage: async () => null },
     'expo/fetch': {
       fetch: async (url, options) => {
         request = { url, options };
@@ -154,6 +156,7 @@ test('Android client gives an extensionless Expo recording a stable M4A upload n
     }
   }
   const { transcribeBayMoAudio } = load('src/lib/baymo-chat.ts', {
+    '@/lib/usage': { aiLimitMessage: async () => null },
     'expo/fetch': {
       fetch: async (url, options) => {
         request = { url, options };
@@ -238,6 +241,7 @@ test('Android stores Cedar audio in temporary cache and deletes it after playbac
     delete() { this.deleted = true; this.exists = false; }
   }
   const { synthesizeBayMoSpeech } = load('src/lib/baymo-chat.ts', {
+    '@/lib/usage': { aiLimitMessage: async () => null },
     'expo/fetch': {
       fetch: async (url, options) => {
         request = { url, options };

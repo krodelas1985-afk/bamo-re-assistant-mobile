@@ -52,6 +52,7 @@ export default function SocialScreen() {
   const [history, setHistory] = useState<AdPost[]>([]);
   const [videos, setVideos] = useState<VideoRequest[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     const [p, pg, ap, appr, up, hist, vids] = await Promise.all([
@@ -70,6 +71,7 @@ export default function SocialScreen() {
     setUpcoming(up);
     setHistory(hist);
     setVideos(vids);
+    setCheckedAt(Date.now());
     setLoading(false);
   }, []);
 
@@ -80,11 +82,11 @@ export default function SocialScreen() {
   );
 
   const fbPage = pages.find((p) => p.platform === 'facebook') ?? pages[0] ?? null;
-  const activePlan = autopost && autopost.status === 'active' && new Date(autopost.ends_at).getTime() > Date.now()
+  const activePlan = autopost && autopost.status === 'active' && new Date(autopost.ends_at).getTime() > checkedAt
     ? autopost
     : null;
   const daysLeft = activePlan
-    ? Math.max(0, Math.ceil((new Date(activePlan.ends_at).getTime() - Date.now()) / 864e5))
+    ? Math.max(0, Math.ceil((new Date(activePlan.ends_at).getTime() - checkedAt) / 864e5))
     : 0;
 
   const requestPageConnection = async () => {

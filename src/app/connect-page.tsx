@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
@@ -20,31 +20,54 @@ const RETURN_URL = 'bamo://meta-connected';
 export default function ConnectPageScreen() {
   const router = useRouter();
   const { profile } = useAuth();
-  const canManage = profile?.role === 'client_admin';
+  const { status, message } = useLocalSearchParams<{ status?: string; message?: string }>();
+  const [returnMessage, setReturnMessage] = useState<string | null>(null);
   const [state, setState] = useState<MetaConnectionState | null>(null);
+  const canManage = profile?.role === 'client_admin' && state?.can_manage === true;
+  const pending = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  const profileId = profile?.id;
+  const clientId = profile?.client_id;
+  const callbackNotice = status === 'error' ? typeof message === 'string' ? message.slice(0, 500) : 'Facebook did not complete the connection. Please try again.'
+    : status === 'ok' ? 'Facebook authorization completed. Checking your connection below.' : null;
 
   const refresh = useCallback(async () => {
-    if (!canManage) { setLoading(false); return; }
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
+    if (!profileId || !clientId) { setState(null); setError('Select a workspace before checking Facebook.'); setLoading(false); return; }
     try {
       setError(null);
-      setState(await fetchMetaConnection());
+      const next = await fetchMetaConnection(controller.signal);
+      if (!controller.signal.aborted) setState(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not check the connection.');
+      if (!controller.signal.aborted) { setState(null); setError(err instanceof Error ? err.message : 'Could not check the connection.'); }
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  }, [canManage]);
+  }, [profileId, clientId]);
 
-  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => {
+    setState(null); setLoading(true); void refresh();
+    const subscription = AppState.addEventListener('change', value => { if (value === 'active' && !busyRef.current) void refresh(); });
+    const timer = setInterval(() => { if (AppState.currentState === 'active' && !busyRef.current) void refresh(); }, 30000);
+    return () => { subscription.remove(); clearInterval(timer); pending.current?.abort(); };
+  }, [refresh]));
 
   const connect = async () => {
+    if (busyRef.current || !canManage || !state?.enabled) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
+    setReturnMessage(null);
     try {
       const { login_url } = await startMetaConnection();
+      const login = new URL(login_url);
+      const base = new URL(process.env.EXPO_PUBLIC_ADS_MANAGER_URL!);
+      if (login.origin !== base.origin || login.pathname !== '/api/auth/meta/client-login' || login.protocol !== 'https:') throw new Error('Facebook returned an invalid authorization link.');
       const result = await WebBrowser.openAuthSessionAsync(login_url, RETURN_URL);
       if (result.type === 'success') {
         const resultUrl = new URL(result.url);
@@ -52,25 +75,31 @@ export default function ConnectPageScreen() {
           throw new Error(resultUrl.searchParams.get('message') || 'Facebook did not complete the connection.');
         }
         await refresh();
+      } else {
+        setReturnMessage('Facebook connection was cancelled. No new Page was connected.');
+        await refresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not connect Facebook.');
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
   const disconnect = () => Alert.alert(
     'Disconnect Facebook Page?',
-    'BayMo will stop receiving new Messenger conversations from this Page.',
+    'This disconnects Messenger for this workspace across BaMo CRM, Ads Manager and mobile. BaMo may stop receiving new conversations from this Page.',
     [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Disconnect', style: 'destructive', onPress: async () => {
+          if (busyRef.current || !canManage || !state?.enabled) return;
+          busyRef.current = true;
           setBusy(true);
           try { await disconnectMetaConnection(); await refresh(); }
           catch (err) { Alert.alert('Could not disconnect', err instanceof Error ? err.message : 'Please try again.'); }
-          finally { setBusy(false); }
+          finally { busyRef.current = false; setBusy(false); }
         },
       },
     ],
@@ -88,28 +117,30 @@ export default function ConnectPageScreen() {
         <Text style={styles.title}>Connect your Facebook Page</Text>
         <Text style={styles.lede}>New Page messages become leads in BayMo, where your team can reply and follow up.</Text>
         {loading ? <ActivityIndicator color={BrandColors.navy} style={styles.loader} /> : null}
+        {returnMessage || callbackNotice ? <Text accessibilityRole="alert" style={styles.centered}>{returnMessage || callbackNotice}</Text> : null}
 
-        {!loading && !canManage ? (
+        {!loading && state && !canManage ? (
           <View style={styles.notice}>
             <Ionicons name="lock-closed-outline" size={24} color={BrandColors.navy} />
             <Text style={styles.noticeTitle}>Workspace admin access needed</Text>
-            <Text style={styles.centered}>Ask your workspace admin to connect the Facebook Page.</Text>
+            <Text style={styles.centered}>You can view the shared status here. Only your workspace administrator can change the connection.</Text>
           </View>
         ) : null}
 
-        {!loading && canManage && state?.connected ? (
+        {!loading && state?.connected ? (
           <View style={styles.statusCard}>
             <Ionicons name="checkmark-circle" size={36} color={BrandColors.success} />
             <Text style={styles.noticeTitle}>Connected</Text>
             <Text style={styles.pageName}>{state.page?.page_name}</Text>
+            <Text style={styles.centered}>Facebook is already connected for this workspace across BaMo CRM, Ads Manager and mobile. No need to connect again.</Text>
             <Check label="Messenger access active" />
             <Check label="Webhook subscription verified" />
             <Check label="Page permissions granted" />
-            {busy ? <ActivityIndicator color={BrandColors.navy} /> : <Button label="Disconnect Page" variant="secondary" onPress={disconnect} style={styles.fullWidth} />}
+            {canManage && state.enabled ? busy ? <ActivityIndicator color={BrandColors.navy} /> : <Button label="Disconnect Page" variant="secondary" onPress={disconnect} style={styles.fullWidth} /> : null}
           </View>
         ) : null}
 
-        {!loading && canManage && !state?.connected ? (
+        {!loading && state && !state.connected ? (
           <View style={styles.statusCard}>
             {state?.connection || state?.page ? (
               <>
@@ -124,10 +155,19 @@ export default function ConnectPageScreen() {
               <Check label="Confirm access — usually under two minutes" />
             </View>
             <Text style={styles.privacy}>BayMo requests only the Page permissions needed for Messenger. Your Facebook password is never shared with BayMo.</Text>
-            {busy ? <ActivityIndicator color={BrandColors.navy} /> : <Button label={state?.connection ? 'Reconnect Facebook' : 'Continue with Facebook'} onPress={connect} style={styles.fullWidth} />}
+            <Text style={styles.noticeTitle}>{state.reconnect_required ? 'Reconnect needed' : 'Not connected'}</Text>
+            {!state.enabled ? <Text style={styles.centered}>Awaiting activation. Your existing services remain available.</Text> : null}
+            {canManage && state.enabled ? busy ? <ActivityIndicator color={BrandColors.navy} /> : <Button label={state.reconnect_required ? 'Reconnect Facebook' : 'Continue with Facebook'} onPress={connect} style={styles.fullWidth} /> : null}
+            {canManage && state.enabled && (state.connection || state.page) ? <Button label="Remove broken connection" variant="secondary" onPress={disconnect} disabled={busy} style={styles.fullWidth} /> : null}
           </View>
         ) : null}
 
+        <Button label="Refresh connection status" variant="secondary" onPress={() => void refresh()} disabled={busy || loading} style={styles.fullWidth} />
+        <View style={styles.statusCard}>
+          <Text style={styles.noticeTitle}>Meta Ads</Text>
+          <Text style={styles.centered}>Separate client Ads authorization is not available yet. Existing operator-managed ads are unchanged.</Text>
+          <Button label="Ads connection — coming later" disabled variant="secondary" onPress={() => {}} style={styles.fullWidth} />
+        </View>
         {error ? (
           <Pressable style={styles.errorBox} onPress={() => void refresh()}>
             <Text style={styles.errorText}>{error}</Text><Text style={styles.retry}>Tap to try again</Text>

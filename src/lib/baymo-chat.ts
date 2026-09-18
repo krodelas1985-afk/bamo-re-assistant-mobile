@@ -3,6 +3,7 @@ import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { getEdgeFunctionAuth, supabase } from '@/lib/supabase';
+import { aiLimitMessage } from '@/lib/usage';
 
 export type ChatMessage = { role: 'user' | 'assistant'; content: string };
 export type ChatTask = 'chat' | 'document';
@@ -54,7 +55,7 @@ export async function sendToBayMo(
       ...(context ? { context_lead_id: context.leadId, context_listing_id: context.listingId } : {}),
     },
   });
-  if (error) return { reply: null, pendingAction: null, error: error.message };
+  if (error) return { reply: null, pendingAction: null, error: (await aiLimitMessage(error)) ?? error.message };
   if (data?.error) return { reply: null, pendingAction: null, error: String(data.error) };
   return {
     reply: (data?.reply as string) ?? '',

@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
   const [needsTour, setNeedsTour] = useState<boolean | null>(null);
+  const [resolvedProfileUserId, setResolvedProfileUserId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -90,25 +91,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  const currentUserId = session?.user?.id;
   useEffect(() => {
-    if (!session?.user) {
-      setProfile(null);
-      setNeedsOnboarding(null);
-      setNeedsTour(null);
-      return;
-    }
+    if (!currentUserId) return;
     let cancelled = false;
-    fetchProfile(session.user.id).then(async (prof) => {
+    fetchProfile(currentUserId).then(async (prof) => {
+      const [onboarding, tour] = await Promise.all([
+        resolveNeedsOnboarding(currentUserId, prof), resolveNeedsTour(currentUserId, prof),
+      ]);
       if (cancelled) return;
       setProfile(prof);
-      setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, prof));
-      if (cancelled) return;
-      setNeedsTour(await resolveNeedsTour(session.user.id, prof));
+      setNeedsOnboarding(onboarding);
+      setNeedsTour(tour);
+      setResolvedProfileUserId(currentUserId);
     });
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [currentUserId]);
 
   // Register this device for push once we have an authenticated user.
   useEffect(() => {
@@ -130,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const prof = await fetchProfile(session.user.id);
     setProfile(prof);
     setNeedsOnboarding(await resolveNeedsOnboarding(session.user.id, prof));
+    setResolvedProfileUserId(session.user.id);
   };
 
   const signIn = async (email: string, password: string) => {
@@ -194,11 +195,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         session,
-        profile,
+        profile: profile?.id === currentUserId ? profile : null,
         loading,
-        needsOnboarding,
+        needsOnboarding: resolvedProfileUserId === currentUserId ? needsOnboarding : null,
         refreshOnboarding,
-        needsTour,
+        needsTour: resolvedProfileUserId === currentUserId ? needsTour : null,
         refreshWelcomeTour,
         refreshProfile,
         signIn,

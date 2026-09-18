@@ -159,7 +159,7 @@ export default function AdsScreen() {
         <View style={styles.card}>
           <View style={styles.rowStart}>
             <Ionicons name="sparkles" size={18} color={BrandColors.orange} />
-            <Text style={styles.cardTitle}>BaMo's weekly take</Text>
+            <Text style={styles.cardTitle}>BaMo&apos;s weekly take</Text>
           </View>
           <Text style={styles.summary}>{report.summary}</Text>
           {(report.verdicts ?? []).map((v) => {

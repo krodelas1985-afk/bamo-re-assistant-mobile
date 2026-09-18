@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkAiQuota } from '../_shared/ai-quota.ts';
 
 /**
  * Social post caption generator for the BaMo RE Assistant app.
@@ -226,6 +227,8 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (!profile?.client_id) return j({ error: 'Your workspace is not linked yet.' }, 403);
   const clientId = profile.client_id;
+  const quota = await checkAiQuota(admin, clientId);
+  if (quota) return j(quota.body, quota.status);
 
   const { data: client } = await admin
     .from('clients')
